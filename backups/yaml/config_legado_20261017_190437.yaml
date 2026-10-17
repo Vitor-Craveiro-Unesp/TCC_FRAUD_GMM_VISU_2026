@@ -1,0 +1,322 @@
+# ============================================================
+# TCC_EXPERIMENTAL_V3 — CONFIGURACAO CENTRAL
+# GMM unico nao supervisionado + risco historico por soft counts
+# Mesmo YAML para execucao local e futura execucao no cluster.
+#
+# REGRA DE HIPERPARAMETROS:
+# - VALOR UNICO: n_components: 2
+# - VETOR/GRID: n_components: [1, 2, 4, 8]
+# - O codigo futuro deve tratar valores unicos como listas de 1 item
+#   e executar o produto cartesiano dos vetores ATIVOS.
+# - NAO transformar cada valor dentro de "mapeamentos", "sufixos",
+#   "colunas_excluir", "dimensoes_permitidas" etc. em hiperparametros.
+# - Listas grandes multiplicam o numero de treinamentos e o custo!
+# - PCA e t-SNE sao ALTERNATIVOS: NUNCA encadear um apos o outro.
+# - Inicializacao "pca" do t-SNE NAO e uma etapa PCA de reducao;
+#   apenas inicializa as coordenadas do proprio t-SNE.
+#   Para nao empregar PCA nem na inicializacao, use "random".
+# ============================================================
+
+experimento:
+  nome: "TCC_EXPERIMENTAL_V3"
+  semente: 42                        # Inteiro unico; nao e parametro de busca.
+
+# ============================================================
+# DADOS
+# ============================================================
+dados:
+  fonte_url: "https://www.kaggle.com/datasets/kartik2112/fraud-detection/data"
+  arquivo: "data/raw/dataset_raw.parquet"
+  coluna_alvo: "TARGET_OMEGA"
+  classe_positiva: 1                 # 1=fraude; confirmar na auditoria.
+  coluna_id: "NID_ALPHA"             # Nunca usar como feature.
+  colunas_excluir: []                # Lista de NOMES de colunas; NAO e grid.
+
+  # 1.0 = desenvolvimento completo; 0.1 = 10% apenas para ensaio local.
+  # Se fracao_base < 1.0, amostrar SOMENTE o desenvolvimento
+  # DEPOIS de reservar o teste final. O teste nunca e subamostrado.
+  fracao_base: 1.0
+
+# ============================================================
+# DIVISAO DOS DADOS / TESTE FINAL INTACTO
+# ============================================================
+divisao:
+  total_folds: 10                    # 10 particoes; 1 reservada para teste.
+  quantidade_folds_teste: 1
+  qual_fold_teste: 10                # Fold 10 intocado na selecao.
+  estratificada: true                # Revisar apos auditoria temporal/grupos.
+  embaralhar: true                  # Usar semente do experimento.
+  # IMPORTANTE: caso haja dependencia temporal ou entre entidades,
+  # substituir a estrategia por separacao temporal ou por grupos.
+
+# ============================================================
+# PRE-PROCESSAMENTO — APRENDER SOMENTE NOS DADOS DE TREINO
+# ============================================================
+preprocessamento:
+  identificar_por_sufixo: true
+
+  encodings:
+    frequency:
+      sufixo: "_FEWF"
+      tipo: "frequencia_relativa"
+      # Categorias desconhecidas na validacao: 1/n_treino.
+      fallback: "1/n"
+
+    binary:
+      sufixo: "_BE"
+      # Mapeamentos deterministas conhecidos; conferir tipos na auditoria.
+      mapeamentos:
+        SEND_GENDER_BE:
+          F: 0
+          M: 1
+        TRANS_YEAR_BE:
+          2019: 0
+          2020: 1
+
+    onehot:
+      sufixo: "_OHEWI"
+      # Opcoes do OneHotEncoder: "ignore", "error",
+      # "infrequent_if_exist" (exige configuracao adicional).
+      handle_unknown: "ignore"
+
+  ciclicas:
+    # Valores ja transformados: NAO reaplicar seno/cosseno.
+    # Nomenclatura da base: _SIN e _COS.
+    sufixos: ["_SIN", "_COS"]         # Lista de SUFIXOS, nao e grid.
+    ja_transformadas: true
+    padronizar: false
+
+  numericas:
+    # Imputacao "mediana"; padronizacao com StandardScaler.
+    # Ambos ajustados apenas no treino de cada fold.
+    imputacao: "mediana"
+    padronizacao: true
+
+  categoricas_sem_sufixo:
+    # "exigir_sufixo": falhar em vez de adivinhar encoder.
+    tratamento: "exigir_sufixo"
+
+  verificar_vazamento: true
+
+# ============================================================
+# AMOSTRAGEM — SO NO TREINO; VALIDACAO/TESTE SEM ALTERACAO
+# ============================================================
+amostragem:
+  # Uma opcao "NORMAL" ou "RUS"; para comparar, usar ["NORMAL", "RUS"].
+  modo: "NORMAL"                    # Opcoes: "NORMAL", "RUS".
+
+  # Usada somente se modo incluir "RUS".
+  # Ex.: 32 = ate 32 negativas por fraude, mantendo todas as fraudes.
+  # Pode variar: [16, 32, 64].
+  razao_negativos_positivos: 32
+
+  aplicar_somente_treino: true
+
+  # Com RUS, ajustar o GMM na amostra reduzida SEM rotulos.
+  # O risco historico utiliza os ROTULOS e as responsabilidades
+  # de TODOS os dados rotulados originais do treino do fold.
+
+# ============================================================
+# REDUCAO DE DIMENSIONALIDADE — ESCOLHA EXCLUSIVA
+# ============================================================
+reducao:
+  metodo: "PCA"                     # Opcoes: "PCA" OU "TSNE".
+  # Uma unica escolha por execucao. NUNCA ["PCA", "TSNE"]
+  # como encadeamento; a outra secao fica inativa.
+
+# ============================================================
+# PCA — VALOR UNICO OU LISTA NOS PARAMETROS ABAIXO
+# ============================================================
+pca:
+  # Inteiro positivo <= quantidade de features apos encoding.
+  # Ex.: 2 ou [2, 4, 8, 16]. "mle" requer condicoes especificas.
+  n_components: [2, 3]
+
+  # Opcional: manter variancias ou branquear componentes.
+  # Ex.: false ou [false, true].
+  whiten: false
+
+  # Opcoes: "auto", "full", "randomized", "covariance_eigh", "arpack".
+  # Algumas combinacoes nao sao compativeis com n_components.
+  svd_solver: "auto"
+
+  # Usado no solver "randomized" (e efeitos de aleatoriedade).
+  # Opcoes: "auto" ou inteiro nao negativo; ex.: [3, 5, 7].
+  iterated_power: "auto"
+
+# ============================================================
+# t-SNE / openTSNE — VALOR UNICO OU LISTA NOS PARAMETROS ABAIXO
+# ============================================================
+tsne:
+  # Exemplos: 30 ou [10, 30, 50]; valores positivos, validos
+  # para o tamanho do treino; custo elevado para bases grandes.
+  perplexity: [10]
+
+  # Dimensionalidade do embedding: 2 ou [2, 3].
+  n_components: 2
+
+  # Opcoes: "random" (= aleatoria), "pca".
+  # Exemplo de VETOR pedido: ["random", "pca"].
+  # "pca" AQUI so inicializa o t-SNE; NAO aplica PCA antes do t-SNE.
+  initialization: ["random", "pca"]
+
+  # Metricas comuns do openTSNE: "euclidean", "cosine",
+  # "manhattan" e "correlation". Ex.: ["euclidean", "cosine"].
+  metric: "euclidean"
+
+  # Opcoes: "auto" ou real positivo; ex.: ["auto", 200.0].
+  learning_rate: "auto"
+
+  # Exagero inicial: real positivo; ex.: [8.0, 12.0].
+  early_exaggeration: 12.0
+
+  # Numero de iteracoes na fase principal: inteiro positivo.
+  # Ex.: [250, 500, 1000].
+  n_iter: 300
+
+  # Aproximacao Barnes-Hut: theta entre 0 e 1; 0 = exata.
+  # Ex.: [0.3, 0.5, 0.7]; verificar viabilidade para o dataset.
+  theta: 0.5
+
+  # O openTSNE permite transformar NOVOS registros sem refazer
+  # o embedding de validacao/teste. Nunca fit com esses registros.
+
+# ============================================================
+# GMM UNICO SEM ROTULOS — K GAUSSIANAS DENTRO DO MESMO GMM
+# ============================================================
+gmm:
+  # 1 = uma gaussiana; 2 = duas; [1, 2, 4, 8] = grade de K.
+  n_components: [1, 2]
+
+  # Opcoes: "full", "diag", "tied", "spherical".
+  # "diag" geralmente economiza memoria/tempo em base grande.
+  covariance_type: "diag"
+
+  # Float > 0; ex.: [1.0e-6, 1.0e-5, 1.0e-4].
+  reg_covar: 0.000001
+
+  # Inteiro positivo; ex.: [100, 200].
+  max_iter: 250
+
+  # Numero de inicializacoes do GMM; ex.: [1, 3].
+  n_init: 3
+
+  # Float positivo; ex.: [0.001, 0.0001].
+  tol: 0.001
+
+  # Opcoes: "kmeans", "k-means++", "random", "random_from_data".
+  init_params: "kmeans"
+
+  # O GMM recebe SOMENTE X_treino (sem coluna alvo).
+
+# ============================================================
+# RISCO HISTORICO POR SOFT COUNTS — SOMENTE ROTULOS DO TREINO
+# ============================================================
+risco_historico:
+  metodo: "soft_counts"             # Unico metodo do V3.
+
+  # 0.0 = EXATAMENTE RH_k = sum(gamma_ik * y_i) / sum(gamma_ik).
+  # >0 aplica suavizacao de componente para evitar extremos.
+  # Ex.: 0.0 ou [0.0, 5.0, 10.0].
+  suavizacao: 0.0
+
+  # Usar X/y do treino ORIGINAL do fold para computar RH.
+  # Mesmo se o GMM foi ajustado em dados com RUS.
+  estimar_com: "treino_original"
+
+  # p(fraude | x) = soma_k responsabilidade(x,k) * RH_k.
+  previsao: "soma_ponderada"
+
+  # NAO existe secao de busca de prioris neste classificador.
+  # A prevalencia observada no treino entra nos soft counts.
+
+# ============================================================
+# CROSS-VALIDATION E METRICAS — 9 FOLDS DE DESENVOLVIMENTO
+# ============================================================
+validacao_cruzada:
+  estrategia: "rotacao_folds_restantes"
+  evitar_vazamento: true
+  # 10 folds totais; fold 10 = teste; folds 1 a 9 = desenvolvimento.
+  # Repetir 9 vezes: 8 folds de treino + 1 de validacao.
+  # Em cada rodada, aprender encoder, scaler, reducao, GMM e RH
+  # SOMENTE com o treino; prever validacao sem reajuste.
+
+avaliacao:
+  # AP = Average Precision (NAO AUC-PR trapezoidal).
+  metrica_pr: "average_precision"
+
+  calcular_mcc: true
+  calcular_logloss: true
+  calcular_composite: true
+
+  # Reunir primeiro todas as predicoes OOF.
+  # So DEPOIS escolher o limiar maximizando MCC no OOF.
+  selecao_limiar: "mcc_oof"
+
+  # Score = [AP + (MCC + 1)/2 + exp(-LogLoss)] / 3.
+  formula_composite: "(AP + (MCC + 1)/2 + exp(-LogLoss)) / 3"
+
+  # Guardar limiar e configuracao escolhidos antes do teste final.
+  congelar_modelo_antes_teste: true
+
+# ============================================================
+# EXECUCAO — VALORES OPERACIONAIS; NAO SAO GRID
+# ============================================================
+execucao:
+  # 1 por seguranca no notebook; revisar CPUs/RAM no cluster.
+  n_jobs: -1
+
+  # Funcionalidades futuras opcionais; nao alterar a metodologia.
+  usar_cache: true
+  retomar: true
+  diretorio_retomada: null
+  proteger_resultados: true
+
+# ============================================================
+# SAIDAS — PASTA COM DATA/HORA EM QUE TERMINOU
+# ============================================================
+saidas:
+  diretorio_base: "outputs"
+  # Ex.: experimento_pca_gmm_20261015_163025
+  #       experimento_tsne_gmm_20261015_181010
+  # O timestamp deve ser gerado APOS a conclusao do experimento.
+  padrao_pasta: "experimento_{metodo}_gmm_{datahora_fim}"
+  timezone: "America/Sao_Paulo"
+
+  salvar_configuracao: true
+  salvar_metricas: true
+  salvar_predicoes_oof: true
+  salvar_modelos: true
+  salvar_graficos: true
+  salvar_relatorio: true
+  salvar_manifesto: true
+  registrar_versoes_bibliotecas: true
+
+# ============================================================
+# VISUALIZACAO — NAO E GRID
+# ============================================================
+visualizacao:
+  habilitar: true
+
+  # 0.5 serve como grafico de referencia, mesmo que limiar MCC varie.
+  gerar_fronteira_05: false
+  gerar_fronteira_mcc: true
+
+  # SOMENTE para visualizacoes em 1D/2D/3D.
+  # Lista de DIMENSOES PERMITIDAS, NAO um vetor de busca.
+  dimensoes_permitidas: [1, 2, 3]
+  pontos_maximos_amostra: 5000
+
+  # Evitar malhas enormes (particularmente em 3D).
+  malha:
+    resolucao_1d: 500
+    resolucao_2d: 180
+    resolucao_3d: 35
+    margem: 0.15
+
+  gaussianas:
+    mostrar_componentes: true
+    n_desvios: 2.0
+
+  arquivos:
+    dpi: 180

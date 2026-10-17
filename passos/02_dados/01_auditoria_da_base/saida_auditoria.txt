@@ -1,0 +1,54 @@
+=== PASSO 02.01 — AUDITORIA DESCRITIVA ===
+Arquivo: data\raw\dataset_raw.parquet
+Tamanho: 64.34 MiB
+Registros: 1,852,394
+Variáveis: 22 | Row groups: 2
+
+=== DISTRIBUIÇÃO DO ALVO ===
+Classe 0: 1,842,743 (99.4790%)
+Classe 1: 9,651 (0.5210%)
+
+=== COLUNAS (TIPO E AUSÊNCIAS) ===
+NID_ALPHA | int32 | nulos=0
+TRANS_NUM_CARD_FEWF | int64 | nulos=0
+TRANS_VALUE | double | nulos=0
+TRANS_DAY | int8 | nulos=0
+TRANS_WEEK_OHEWI | dictionary<values=string, indices=int8, ordered=0> | nulos=0
+TRANS_YEAR_BE | int16 | nulos=0
+TRANS_MONTH_SIN | double | nulos=0
+TRANS_MONTH_COS | double | nulos=0
+TRANS_HOUR_SIN | double | nulos=0
+TRANS_HOUR_COS | double | nulos=0
+SEND_NAME_FEWF | dictionary<values=string, indices=int16, ordered=0> | nulos=0
+SEND_GENDER_BE | dictionary<values=string, indices=int8, ordered=0> | nulos=0
+SEND_AGE | float | nulos=0
+SEND_JOB_FEWF | dictionary<values=string, indices=int16, ordered=0> | nulos=0
+SEND_LAT_REGISTER | float | nulos=0
+SEND_LONG_REGISTER | float | nulos=0
+SEND_POP_REGISTER | int32 | nulos=0
+RECEIVE_LOC_FEWF | dictionary<values=string, indices=int16, ordered=0> | nulos=0
+RECEIVE_CATEGORY_OHEWI | dictionary<values=string, indices=int8, ordered=0> | nulos=0
+RECEIVE_LAT | double | nulos=0
+RECEIVE_LONG | double | nulos=0
+TARGET_OMEGA | int8 | nulos=0
+
+=== IDENTIFICADOR (SOMENTE AMOSTRA) ===
+Coluna: NID_ALPHA
+IDs não nulos verificados: 50,000
+Repetições encontradas na amostra: 0
+
+=== CATEGORIAS: CARDINALIDADE NA AMOSTRA ===
+TRANS_WEEK_OHEWI: 7 distintas na amostra; exemplos=['Friday', 'Monday', 'Saturday', 'Sunday', 'Thursday', 'Tuesday', 'Wednesday']
+SEND_NAME_FEWF: 902 distintas na amostra; exemplos=['Aaron Murray', 'Aaron Pena', 'Aaron Rogers', 'Aaron Stewart', 'Adam Keller', 'Adam Kirk', 'Adam Mcdonald', 'Adam Riddle']
+SEND_GENDER_BE: 2 distintas na amostra; exemplos=['F', 'M']
+SEND_JOB_FEWF: 475 distintas na amostra; exemplos=['Academic librarian', 'Accountant, chartered certified', 'Accountant, chartered public finance', 'Accounting technician', 'Acupuncturist', 'Administrator', 'Administrator, arts', 'Administrator, charities/voluntary organisations']
+RECEIVE_LOC_FEWF: 693 distintas na amostra; exemplos=['fraud_Abbott-Rogahn', 'fraud_Abbott-Steuber', 'fraud_Abernathy and Sons', 'fraud_Abshire PLC', 'fraud_Adams, Kovacek and Kuhlman', 'fraud_Adams-Barrows', 'fraud_Altenwerth, Cartwright and Koss', 'fraud_Altenwerth-Kilback']
+RECEIVE_CATEGORY_OHEWI: 14 distintas na amostra; exemplos=['entertainment', 'food_dining', 'gas_transport', 'grocery_net', 'grocery_pos', 'health_fitness', 'home', 'kids_pets']
+
+=== CANDIDATAS A VERIFICAÇÃO DE DEPENDÊNCIA ===
+Temporais: ['TRANS_DAY', 'TRANS_WEEK_OHEWI', 'TRANS_YEAR_BE', 'TRANS_MONTH_SIN', 'TRANS_MONTH_COS', 'TRANS_HOUR_SIN', 'TRANS_HOUR_COS']
+Entidades: ['TRANS_NUM_CARD_FEWF', 'SEND_NAME_FEWF']
+
+ATENÇÃO: termos no nome não comprovam vazamento; exigem revisão.
+A escolha entre divisão estratificada, temporal ou por grupos será feita depois.
+PASSO 02.01 — EXECUÇÃO DA AUDITORIA FINALIZADA; AGUARDANDO REVISÃO.

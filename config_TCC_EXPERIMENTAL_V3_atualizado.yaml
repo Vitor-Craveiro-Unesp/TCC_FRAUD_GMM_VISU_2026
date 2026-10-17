@@ -1,0 +1,621 @@
+# ============================================================
+# TCC_EXPERIMENTAL_V3 — CONFIGURACAO CENTRAL
+# GMM unico nao supervisionado + risco historico por soft counts
+# Mesmo YAML para execucao local e futura execucao no cluster.
+#
+# REGRA DE HIPERPARAMETROS:
+# - VALOR UNICO: n_components: 2
+# - VETOR/GRID: n_components: [1, 2, 4, 8]
+# - O codigo futuro deve tratar valores unicos como listas de 1 item
+#   e executar o produto cartesiano dos vetores ATIVOS.
+# - NAO transformar cada valor dentro de "mapeamentos", "sufixos",
+#   "colunas_excluir", "dimensoes_permitidas" etc. em hiperparametros.
+# - Listas grandes multiplicam o numero de treinamentos e o custo!
+# - PCA e t-SNE sao ALTERNATIVOS: NUNCA encadear um apos o outro.
+# - Inicializacao "pca" do t-SNE NAO e uma etapa PCA de reducao;
+#   apenas inicializa as coordenadas do proprio t-SNE.
+#   Para nao empregar PCA nem na inicializacao, use "random".
+# ============================================================
+
+experimento:
+  nome: "TCC_EXPERIMENTAL_V3"
+  semente: 42                        # Inteiro unico; nao e parametro de busca.
+
+# ============================================================
+# DADOS
+# ============================================================
+dados:
+  fonte_url: "https://www.kaggle.com/datasets/kartik2112/fraud-detection/data"
+  arquivo: "data/raw/dataset_raw.parquet"
+  coluna_alvo: "TARGET_OMEGA"
+  classe_positiva: 1                 # 1=fraude; confirmar na auditoria.
+  coluna_id: "NID_ALPHA"             # Nunca usar como feature.
+  colunas_excluir: []                # Lista de NOMES de colunas; NAO e grid.
+
+  # 1.0 = desenvolvimento completo; 0.1 = 10% apenas para ensaio local.
+  # Se fracao_base < 1.0, amostrar SOMENTE o desenvolvimento
+  # DEPOIS de reservar o teste final. O teste nunca e subamostrado.
+  fracao_base: 1.0
+
+# ============================================================
+# DIVISAO DOS DADOS / TESTE FINAL INTACTO
+# ============================================================
+divisao:
+  total_folds: 10                    # 10 particoes; 1 reservada para teste.
+  quantidade_folds_teste: 1
+  qual_fold_teste: 10                # Fold 10 intocado na selecao.
+  estratificada: true                # Revisar apos auditoria temporal/grupos.
+  embaralhar: true                  # Usar semente do experimento.
+  # IMPORTANTE: caso haja dependencia temporal ou entre entidades,
+  # substituir a estrategia por separacao temporal ou por grupos.
+
+# ============================================================
+# PRE-PROCESSAMENTO — APRENDER SOMENTE NOS DADOS DE TREINO
+# ============================================================
+preprocessamento:
+  identificar_por_sufixo: true
+
+  encodings:
+    frequency:
+      sufixo: "_FEWF"
+      tipo: "frequencia_relativa"
+      # Categorias desconhecidas na validacao: 1/n_treino. #Frequency Encoding With Fallback
+      fallback: "1/n"
+
+    binary:
+      sufixo: "_BE"
+      # Mapeamentos deterministas conhecidos; conferir tipos na auditoria. #Binary Encoding
+      mapeamentos:
+        SEND_GENDER_BE:
+          F: 0
+          M: 1
+        TRANS_YEAR_BE:
+          2019: 0
+          2020: 1
+
+    onehot:
+      sufixo: "_OHEWI" #One-Hot Encoding With Ignore
+      # Opcoes do OneHotEncoder: "ignore", "error",
+      # "infrequent_if_exist" (exige configuracao adicional).
+      handle_unknown: "ignore"
+
+  ciclicas:
+    # Valores ja transformados: NAO reaplicar seno/cosseno.
+    # Nomenclatura da base: _SIN e _COS.
+    sufixos: ["_SIN", "_COS"]         # Lista de SUFIXOS, nao e grid.
+    ja_transformadas: true
+    padronizar: false
+
+  numericas:
+    # Imputacao "mediana"; padronizacao com StandardScaler.
+    # Ambos ajustados apenas no treino de cada fold.
+    imputacao: "mediana"
+    padronizacao: true
+
+  categoricas_sem_sufixo:
+    # "exigir_sufixo": falhar em vez de adivinhar encoder.
+    tratamento: "exigir_sufixo"
+
+  verificar_vazamento: true
+
+# ============================================================
+# AMOSTRAGEM — SO NO TREINO; VALIDACAO/TESTE SEM ALTERACAO
+# ============================================================
+amostragem:
+  # Uma opcao "NORMAL" ou "RUS"; para comparar, usar ["NORMAL", "RUS"].
+  modo: "NORMAL"                    # Opcoes: "NORMAL", "RUS".
+
+  # Usada somente se modo incluir "RUS".
+  # Ex.: 32 = ate 32 negativas por fraude, mantendo todas as fraudes.
+  # Pode variar: [16, 32, 64].
+  razao_negativos_positivos: 32
+  aplicar_somente_treino: true
+
+  # Com RUS, ajustar o GMM na amostra reduzida SEM rotulos.
+  # O risco historico utiliza os ROTULOS e as responsabilidades
+  # de TODOS os dados rotulados originais do treino do fold.
+  # NAO aplicar uma "correcao de prior" adicional automaticamente.
+  risco_historico:
+    metodo: "soft_counts"
+
+  # Mesmo com RUS, calcular RH usando
+  # todas as transacoes do fold de treino.
+  base_calculo: "treino_original"
+
+
+# ============================================================
+# REDUCAO DE DIMENSIONALIDADE — ESCOLHA EXCLUSIVA
+# ============================================================
+reducao:
+  metodo: "PCA"                     # Opcoes: "PCA" OU "TSNE".
+  # Uma unica escolha por execucao. NUNCA ["PCA", "TSNE"]
+  # como encadeamento; a outra secao fica inativa.
+
+# ============================================================
+# PCA — VALOR UNICO OU LISTA NOS PARAMETROS ABAIXO
+# ============================================================
+pca:
+  # Inteiro positivo <= quantidade de features apos encoding.
+  # Ex.: 2 ou [2, 4, 8, 16]. "mle" requer condicoes especificas.
+  n_components: [2, 3]
+
+  # Opcional: manter variancias ou branquear componentes.
+  # Ex.: false ou [false, true].
+  whiten: false
+
+  # Opcoes: "auto", "full", "randomized", "covariance_eigh", "arpack".
+  # Algumas combinacoes nao sao compativeis com n_components.
+  svd_solver: "auto"
+
+  # Usado no solver "randomized" (e efeitos de aleatoriedade).
+  # Opcoes: "auto" ou inteiro nao negativo; ex.: [3, 5, 7].
+  iterated_power: "auto"
+
+# ============================================================
+# t-SNE / openTSNE — VALOR UNICO OU LISTA NOS PARAMETROS ABAIXO
+# ============================================================
+tsne:
+  # Exemplos: 30 ou [10, 30, 50]; valores positivos, validos
+  # para o tamanho do treino; custo elevado para bases grandes.
+  perplexity: [10]
+
+  # Dimensionalidade do embedding: 2 ou [2, 3].
+  n_components: 2
+
+  # Opcoes: "random" (= aleatoria), "pca".
+  # Exemplo de VETOR pedido: ["random", "pca"].
+  # "pca" AQUI so inicializa o t-SNE; NAO aplica PCA antes do t-SNE.
+  initialization: ["random", "pca"]
+
+  # Metricas comuns do openTSNE: "euclidean", "cosine",
+  # "manhattan" e "correlation". Ex.: ["euclidean", "cosine"].
+  metric: "euclidean"
+
+  # Opcoes: "auto" ou real positivo; ex.: ["auto", 200.0].
+  learning_rate: "auto"
+
+  # Exagero inicial: real positivo; ex.: [8.0, 12.0].
+  early_exaggeration: 12.0
+
+  # Numero de iteracoes na fase principal: inteiro positivo.
+  # Ex.: [250, 500, 1000].
+  n_iter: 300
+
+  # Aproximacao Barnes-Hut: theta entre 0 e 1; 0 = exata.
+  # Ex.: [0.3, 0.5, 0.7]; verificar viabilidade para o dataset.
+  theta: 0.5
+
+  # O openTSNE permite transformar NOVOS registros sem refazer
+  # o embedding de validacao/teste. Nunca fit com esses registros.
+
+# ============================================================
+# GMM UNICO SEM ROTULOS — K GAUSSIANAS DENTRO DO MESMO GMM
+# ============================================================
+gmm:
+  # 1 = uma gaussiana; 2 = duas; [1, 2, 4, 8] = grade de K.
+  n_components: [1, 2]
+
+  # Opcoes: "full", "diag", "tied", "spherical".
+  # "diag" geralmente economiza memoria/tempo em base grande.
+  covariance_type: "diag"
+
+  # Float > 0; ex.: [1.0e-6, 1.0e-5, 1.0e-4].
+  reg_covar: 0.000001
+
+  # Inteiro positivo; ex.: [100, 200].
+  max_iter: 300
+
+  # Numero de inicializacoes do GMM; ex.: [1, 3].
+  n_init: 3
+
+  # Float positivo; ex.: [0.001, 0.0001].
+  tol: 0.001
+
+  # Opcoes: "kmeans", "k-means++", "random", "random_from_data".
+  init_params: "kmeans"
+
+  # O GMM recebe SOMENTE X_treino (sem coluna alvo).
+
+# ============================================================
+# RISCO HISTORICO POR SOFT COUNTS — SOMENTE ROTULOS DO TREINO
+# ============================================================
+risco_historico:
+  metodo: "soft_counts"             # Unico metodo do V3.
+
+  # 0.0 = EXATAMENTE RH_k = sum(gamma_ik * y_i) / sum(gamma_ik).
+  # >0 aplica suavizacao de componente para evitar extremos.
+  # Ex.: 0.0 ou [0.0, 5.0, 10.0].
+  suavizacao: 0.0
+
+  # Usar X/y do treino ORIGINAL do fold para computar RH.
+  # Mesmo se o GMM foi ajustado em dados com RUS.
+  estimar_com: "treino_original"
+
+  # p(fraude | x) = soma_k responsabilidade(x,k) * RH_k.
+  previsao: "soma_ponderada"
+
+  # NAO existe secao de busca de prioris neste classificador.
+  # A prevalencia observada no treino entra nos soft counts.
+
+# ============================================================
+# CROSS-VALIDATION E METRICAS — 9 FOLDS DE DESENVOLVIMENTO
+# ============================================================
+validacao_cruzada:
+  estrategia: "rotacao_folds_restantes"
+  evitar_vazamento: true
+  # 10 folds totais; fold 10 = teste; folds 1 a 9 = desenvolvimento.
+  # Repetir 9 vezes: 8 folds de treino + 1 de validacao.
+  # Em cada rodada, aprender encoder, scaler, reducao, GMM e RH
+  # SOMENTE com o treino; prever validacao sem reajuste.
+
+avaliacao:
+  # AP = Average Precision (NAO AUC-PR trapezoidal).
+  metrica_pr: "average_precision"
+
+  calcular_mcc: true
+  calcular_logloss: true
+  calcular_composite: true
+
+  # Reunir primeiro todas as predicoes OOF.
+  # So DEPOIS escolher o limiar maximizando MCC no OOF.
+  selecao_limiar: "mcc_oof"
+
+  # Score = [AP + (MCC + 1)/2 + exp(-LogLoss)] / 3.
+  formula_composite: "(AP + (MCC + 1)/2 + exp(-LogLoss)) / 3"
+
+  # Guardar limiar e configuracao escolhidos antes do teste final.
+  congelar_modelo_antes_teste: true
+
+# ============================================================
+# EXECUCAO — VALORES OPERACIONAIS; NAO SAO GRID
+# ============================================================
+execucao:
+  # 1 por seguranca no notebook; revisar CPUs/RAM no cluster.
+  n_jobs: -1
+
+  # Funcionalidades futuras opcionais; nao alterar a metodologia.
+  usar_cache: true
+  retomar: true
+  diretorio_retomada: null
+  proteger_resultados: true
+
+# ============================================================
+# SAIDAS — UMA PASTA POR EXPERIMENTO CONCLUIDO
+# ============================================================
+saidas:
+  diretorio_base: "outputs"
+  # Uma unica pasta para PCA OU t-SNE, conforme reducao.metodo.
+  # O nome usa a data/hora LOCAL de FINALIZACAO do experimento.
+  # Exemplos: experimento_pca_gmm_20261015_190500
+  #           experimento_tsne_gmm_20261015_212000
+  padrao_pasta: "experimento_{metodo}_gmm_{datahora_fim}"
+  timezone: "America/Sao_Paulo"
+
+  # DUAS pastas principais obrigatorias dentro do experimento.
+  # Cada pasta tera a sua propria pasta de graficos gerados.
+  pastas:
+    oof: "oof"
+    teste_final: "teste_final"
+    graficos: "graficos_gerados"
+
+  salvar_configuracao: true
+  salvar_metricas: true
+  salvar_predicoes_oof: true
+  salvar_modelos: true
+  salvar_graficos: true
+  salvar_relatorio: true
+  salvar_manifesto: true
+  registrar_versoes_bibliotecas: true
+
+# ============================================================
+# VISUALIZACAO — 18 TIPOS DE GRAFICOS, UM CONTROLE POR TIPO
+# ============================================================
+# NAO E GRID: listas nesta secao sao OPCOES VISUAIS, nunca busca.
+# OOF usa predicoes realmente OOF (nenhum grafico treina em teste).
+# TESTE FINAL usa predicoes de teste do modelo congelado.
+# Analises geometricas (PCA, t-SNE, gaussianas) usam EXCLUSIVAMENTE
+# o modelo final ajustado nos dados de DESENVOLVIMENTO (90%).
+# Elas sao salvas em teste_final/graficos_gerados, com essa origem
+# indicada em titulo/metadata; o teste final NAO ajusta esse modelo.
+# Graficos incompatíveis com o metodo/dimensionalidade sao omitidos
+# e registrados no manifesto (nao gerar placeholders enganosos).
+# ============================================================
+visualizacao:
+  habilitar: true
+
+  # Escolher ambas ou somente uma das etapas para GRAFICOS PREDITIVOS.
+  # Opcoes: ["oof"], ["teste_final"], ["oof", "teste_final"].
+  gerar_em: ["oof", "teste_final"]
+
+  padrao:
+    formato: "png"               # Opcoes: png, pdf, svg.
+    dpi: 180                      # Resolucao do arquivo (PNG).
+    figsize: [9, 6]              # [largura, altura] em polegadas; NAO e grid.
+    grade: true                   # Mostrar grade dos eixos quando couber.
+    titulo: true                  # Exibir titulo descritivo.
+    legenda: true                 # Exibir legenda dos grupos.
+    salvar_dados_grafico: true    # Exportar CSV das coordenadas/resumos quando couber.
+
+  # Estilos globais para scatter e pontos/legendas. Sobrescrever por
+  # grafico so se implementarmos configuracao individual nesse grafico.
+  classes:
+    legitima:
+      nome: "Legitima"
+      cor: "#1f77b4"           # Qualquer cor aceita pelo matplotlib.
+      marcador: "o"             # Opcoes: o (bola), x, * (estrela), s, ^, D, +.
+      tamanho: 12               # Area do marcador em pontos quadrados.
+      alpha: 0.45               # Transparencia entre 0 e 1.
+    fraude:
+      nome: "Fraude"
+      cor: "#d62728"
+      marcador: "*"             # Ex.: x, o, *, s, ^, D, +.
+      tamanho: 42
+      alpha: 0.90
+
+  # Regras de GEOMETRIA para PCA/t-SNE/GMM: desenhar apenas 1D e 2D.
+  # Quando o modelo tiver >=3 dimensoes, gerar pares 2D.
+  # Os indices comecam em 1 e devem existir no embedding do modelo.
+  # Nao combinar coordenadas de folds diferentes em um unico scatter.
+  geometria:
+    apenas_1d_2d: true
+    pares_2d: [[1, 2], [1, 3], [2, 3]]  # NAO e grid.
+    dimensoes_1d: [1]                     # NAO e grid.
+    pontos_maximos_amostra: 20000          # Amostragem somente VISUAL.
+    amostragem_estratificada: true         # Ajuda a mostrar fraudes raras.
+
+  graficos:
+    # --------------------------------------------------------
+    # 01 — CURVA PRECISION-RECALL (AP, NAO AUC-PR TRAPEZOIDAL)
+    # --------------------------------------------------------
+    curva_pr:
+      habilitar: true
+      gerar_em: ["oof", "teste_final"]
+      mostrar_ap: true
+      mostrar_baseline_prevalencia: true
+      limites_recall: [0.0, 1.0]        # [min, max], NAO e grid.
+      limites_precision: [0.0, 1.0]
+
+    # --------------------------------------------------------
+    # 02 — MCC POR LIMIAR; NO TESTE, SO MOSTRAR LIMIAR CONGELADO
+    # --------------------------------------------------------
+    curva_mcc:
+      habilitar: true
+      gerar_em: ["oof", "teste_final"]
+      mostrar_limiar_oof: true
+      mostrar_mcc_no_limiar_oof: true
+      mostrar_limiar_05: true
+      pontos_visualizacao: 2000           # Somente densidade do DESENHO.
+      # MCC otimo e selecionado pelos valores OOF completos, nao
+      # pelos 300 pontos usados para visualizar a curva.
+      # Nunca escolher novo limiar a partir do teste final.
+
+    # --------------------------------------------------------
+    # 03 — MATRIZ DE CONFUSAO COM LIMIAR FIXO 0.5
+    # --------------------------------------------------------
+    matriz_confusao_05:
+      habilitar: true
+      gerar_em: ["oof", "teste_final"]
+      limiar: 0.5                        # Apenas para este grafico.
+
+    # --------------------------------------------------------
+    # 04 — MATRIZ DE CONFUSAO COM LIMIAR MCC ESCOLHIDO NO OOF
+    # --------------------------------------------------------
+    matriz_confusao_mcc:
+      habilitar: true
+      gerar_em: ["oof", "teste_final"]
+      limiar: "mcc_oof"                  # Mesmo limiar congelado no teste.
+
+    # --------------------------------------------------------
+    # 05 — DISTRIBUICAO DAS PROBABILIDADES DE FRAUDE
+    # --------------------------------------------------------
+    distribuicao_probabilidades:
+      habilitar: true
+      gerar_em: ["oof", "teste_final"]
+      tipo: "histograma"               # Opcoes: histograma, densidade.
+      bins: 50                          # Inteiro positivo.
+      separar_classes: true
+      normalizar: true                  # Densidade; classes comparaveis.
+      escala_y: "linear"                # Opcoes: linear, log.
+      marcar_limiar_oof: true
+      marcar_limiar_05: true
+
+
+
+    # --------------------------------------------------------
+    # 06 — COMPARACAO DAS COMBINACOES DE HIPERPARAMETROS
+    # --------------------------------------------------------
+    comparacao_hiperparametros:
+      habilitar: true
+      gerar_em: ["oof"]                # Nunca selecionar usando teste.
+      metricas: ["ap", "mcc", "logloss", "score"]  # Series, nao grid.
+      ordenar_por: "score"              # Opcoes: ap, mcc, logloss, score.
+      destacar_vencedor: true
+      maximo_configuracoes: 25          # Grafico; tabela CSV pode ter todas.
+
+    # --------------------------------------------------------
+    # 07 — RISCO HISTORICO POR COMPONENTE GAUSSIANA
+    # --------------------------------------------------------
+    risco_por_gaussiana:
+      habilitar: true
+      gerar_em: ["teste_final"]         # Diagnostico do modelo final treinado no desenvolvimento.
+      tipo: "barra_horizontal"          # Opcoes: barra, barra_horizontal.
+      ordenar_por: "risco_decrescente"  # Opcoes: indice, risco_crescente, risco_decrescente.
+      mostrar_risco: true
+      mostrar_prevalencia_desenvolvimento: true
+      mostrar_intervalo_aproximado: false  # Se implementado, explicitar metodo.
+
+    # --------------------------------------------------------
+    # 08 — PESOS DO GMM E MASSA DE RESPONSABILIDADES
+    # --------------------------------------------------------
+    pesos_responsabilidades:
+      habilitar: true
+      gerar_em: ["teste_final"]
+      mostrar_peso_mistura: true
+      mostrar_massa_total: true
+      mostrar_massa_fraude: true
+      mostrar_massa_legitima: true
+      # Massas sao calculadas no desenvolvimento, nunca com labels do teste.
+
+    # --------------------------------------------------------
+    # 09 — HEATMAP DOS VETORES DE MEDIAS DAS GAUSSIANAS
+    # --------------------------------------------------------
+    medias_gaussianas:
+      habilitar: true
+      gerar_em: ["teste_final"]
+      tipo: "heatmap"                  # Ex.: heatmap; vetores em CSV completo.
+      anotacoes_numericas: true
+      maximo_dimensoes_exibidas: 12     # Visual; CSV preserva o vetor inteiro.
+
+    # --------------------------------------------------------
+    # 10 — VARIANCIAS/COVARIANCIAS DO GMM
+    # --------------------------------------------------------
+    covariancias_gaussianas:
+      habilitar: true
+      gerar_em: ["teste_final"]
+      tipo: "heatmap"                  # Heatmap por componente.
+      mostrar_diagonal: true
+      mostrar_fora_diagonal: true       # Apenas relevante para full/tied.
+      # diag/spherical: exibir variancias; nunca inventar covariancias.
+      maximo_gaussianas: 16            # Grafico; todas salvas no relatorio.
+
+
+    # --------------------------------------------------------
+    # 11 — COTOVELO / SCREE PLOT DO PCA
+    # --------------------------------------------------------
+    pca_cotovelo:
+      habilitar: true
+      gerar_em: ["teste_final"]
+      somente_se_metodo: "PCA"
+      mostrar_variancia_individual: true
+      mostrar_variancia_acumulada: true
+      destacar_componentes_selecionados: true
+      # Para mostrar o espectro alem do K escolhido, calcular
+      # ajuste DIAGNOSTICO apenas no desenvolvimento, sem escolher
+      # novo K pelo teste. Nao misturar eixos de PCA de folds.
+
+    # --------------------------------------------------------
+    # 12 — PROJECAO PCA 1D / DISPERSAO 2D
+    # --------------------------------------------------------
+    pca_projecoes:
+      habilitar: true
+      gerar_em: ["teste_final"]
+      somente_se_metodo: "PCA"
+      mostrar_dados_desenvolvimento: true
+      mostrar_dados_teste: true
+      colorir_por: "classe_real"        # Opcoes: classe_real, classe_predita, risco, gaussiana_dominante.
+      mostrar_contornos_gaussianas: true
+      usar_estilos_classes: true
+      # A geometria depende do PCA FINAL, nao da combinacao de
+      # PCs diferentes aprendidas nos 9 folds.
+
+    # --------------------------------------------------------
+    # 13 — EMBEDDING t-SNE EM 1D / 2D, COM PARES SE 3D
+    # --------------------------------------------------------
+    tsne_mapa:
+      habilitar: true
+      gerar_em: ["teste_final"]
+      somente_se_metodo: "TSNE"
+      mostrar_dados_desenvolvimento: true
+      mostrar_dados_teste: true         # Novos pontos via transform, sem novo fit.
+      colorir_por: "classe_real"        # Opcoes: classe_real, classe_predita, risco, gaussiana_dominante.
+      usar_estilos_classes: true
+      mostrar_contornos_gaussianas: false # Interpretar com cautela em t-SNE.
+
+    # --------------------------------------------------------
+    # 14 — DIAGNOSTICO t-SNE (KL / OTIMIZACAO)
+    # --------------------------------------------------------
+    tsne_diagnostico:
+      habilitar: true
+      gerar_em: ["teste_final"]
+      somente_se_metodo: "TSNE"
+      mostrar_kl_final: true
+      mostrar_kl_por_iteracao: true     # Apenas se o algoritmo fornecer historico.
+      mostrar_tempo_execucao: true
+      # Nao inventar historico de iteracoes se nao estiver disponivel.
+
+    # --------------------------------------------------------
+    # 15 — MAPA DE RISCO E FRONTEIRA DE DECISAO
+    # --------------------------------------------------------
+    mapa_risco_fronteira:
+      habilitar: true
+      gerar_em: ["teste_final"]
+      limiares: ["mcc_oof", 0.5]        # Opcoes: mcc_oof, 0.5, [mcc_oof, 0.5].
+      n_pontos_scatter: 5000
+      resolucao_1d: 500
+      resolucao_2d: 180               # Malha: 180x180=32400 pontos.
+      margem: 0.15
+      mostrar_gaussianas: true
+      n_desvios: 2.0                  # Elipses/contornos ilustrativos.
+      # Quando dimensoes >2: plotar cortes nos pares de geometria,
+      # fixando as dimensoes NAO exibidas na media do desenvolvimento.
+      # NAO chamar isso de fronteira total projetada do classificador.
+      fixar_demais_dimensoes: "media_desenvolvimento"
+
+  # CONFIGURACAO COMUM AS DUAS MATRIZES ACIMA.
+  # Ordem do sklearn: [[TN, FP], [FN, TP]]; linhas=reais.
+  estilo_matrizes:
+    mostrar:
+      contagem_observada: true         # Quantidade de casos em cada celula.
+      contagem_ideal: true            # TN=Nneg, TP=Npos, FP=FN=0.
+      percentual_proximidade: true    # Quanta perfeicao foi atingida.
+      percentual_da_classe: true      # Proporcao dentro da classe real.
+      diferenca_absoluta_do_ideal: true
+      rotulo_tn_fp_fn_tp: true
+      descricao_quadrante: true
+      totais_linhas_colunas: true
+    # Para TN/TP: observado / total_da_classe.
+    # Para FP/FN (ideal=0): 1 - observado / total_da_classe.
+    # As porcentagens complementares podem coincidir (TN/FP,
+    # TP/FN); nunca dividir por zero. Classe ausente => N/A.
+    escala_proximidade:
+      metodo: "proximidade_ideal"
+      minimo: 0.0
+      maximo: 100.0
+      cor_longe: "#f7fbff"            # Mais claro = longe do ideal.
+      cor_meio: "#6baed6"
+      cor_perto: "#08306b"            # Mais escuro = perto do ideal.
+      adaptar_cor_texto: true
+    bordas:
+      tn: "#2ca02c"                 # Cores independentes das bordas.
+      fp: "#ff7f0e"
+      fn: "#9467bd"
+      tp: "#d62728"
+    rodape:
+      accuracy: false                 # Em base desbalanceada pode enganar.
+      precision: true
+      recall_sensibilidade: true
+      especificidade: true
+      f1: true
+      fpr: true
+      fnr: true
+      mcc: true
+      prevalencia: true
+
+
+  # ----------------------------------------------------------
+  # RELATORIO POR GAUSSIANA: DADOS VETORIAIS, SEM PERDA
+  # ----------------------------------------------------------
+  relatorio_gaussianas:
+    habilitar: true
+    gerar_em: ["teste_final"]
+    salvar_csv: true
+    salvar_json: true                 # Listas/matrizes completas sem truncar.
+    salvar_markdown: true
+    campos:
+      indice: true
+      peso_mistura: true
+      massa_responsabilidade_total: true
+      massa_ponderada_fraudes: true
+      massa_ponderada_legitimas: true
+      risco_historico: true
+      razao_risco_prevalencia: true
+      media_vetor_completo: true
+      covariancia_ou_variancia_completa: true
+      rotulo_descritivo_risco: true
+    # Rotulo apenas para EXPLICACAO, NAO altera o soft assignment.
+    rotulo_descritivo:
+      estrategia: "relativo_prevalencia" # Opcoes: relativo_prevalencia, limiar_absoluto.
+      multiplicador_prevalencia: 2.0    # 2x prevalencia => risco elevado.
+      limiar_absoluto: 0.5             # Usado so se estrategia=limiar_absoluto.
+      rotulo_alto: "alto_risco_fraude"
+      rotulo_baixo: "baixo_risco_fraude"

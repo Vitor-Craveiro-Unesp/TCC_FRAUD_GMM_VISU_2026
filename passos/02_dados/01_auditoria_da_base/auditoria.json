@@ -1,0 +1,229 @@
+{
+  "gerado_em": "2026-10-15T22:51:24-03:00",
+  "arquivo": "data\\raw\\dataset_raw.parquet",
+  "tamanho_arquivo_mib": 64.34,
+  "quantidade_registros": 1852394,
+  "quantidade_variaveis": 22,
+  "row_groups": 2,
+  "alvo": "TARGET_OMEGA",
+  "classe_positiva_configurada": 1,
+  "distribuicao_alvo": {
+    "0": 1842743,
+    "1": 9651
+  },
+  "proporcao_positiva": 0.00521001,
+  "identificador": "NID_ALPHA",
+  "ids_inspecionados_amostra": 50000,
+  "ids_repetidos_amostra": 0,
+  "variaveis": [
+    {
+      "nome": "NID_ALPHA",
+      "tipo": "int32",
+      "nulos": 0
+    },
+    {
+      "nome": "TRANS_NUM_CARD_FEWF",
+      "tipo": "int64",
+      "nulos": 0
+    },
+    {
+      "nome": "TRANS_VALUE",
+      "tipo": "double",
+      "nulos": 0
+    },
+    {
+      "nome": "TRANS_DAY",
+      "tipo": "int8",
+      "nulos": 0
+    },
+    {
+      "nome": "TRANS_WEEK_OHEWI",
+      "tipo": "dictionary<values=string, indices=int8, ordered=0>",
+      "nulos": 0
+    },
+    {
+      "nome": "TRANS_YEAR_BE",
+      "tipo": "int16",
+      "nulos": 0
+    },
+    {
+      "nome": "TRANS_MONTH_SIN",
+      "tipo": "double",
+      "nulos": 0
+    },
+    {
+      "nome": "TRANS_MONTH_COS",
+      "tipo": "double",
+      "nulos": 0
+    },
+    {
+      "nome": "TRANS_HOUR_SIN",
+      "tipo": "double",
+      "nulos": 0
+    },
+    {
+      "nome": "TRANS_HOUR_COS",
+      "tipo": "double",
+      "nulos": 0
+    },
+    {
+      "nome": "SEND_NAME_FEWF",
+      "tipo": "dictionary<values=string, indices=int16, ordered=0>",
+      "nulos": 0
+    },
+    {
+      "nome": "SEND_GENDER_BE",
+      "tipo": "dictionary<values=string, indices=int8, ordered=0>",
+      "nulos": 0
+    },
+    {
+      "nome": "SEND_AGE",
+      "tipo": "float",
+      "nulos": 0
+    },
+    {
+      "nome": "SEND_JOB_FEWF",
+      "tipo": "dictionary<values=string, indices=int16, ordered=0>",
+      "nulos": 0
+    },
+    {
+      "nome": "SEND_LAT_REGISTER",
+      "tipo": "float",
+      "nulos": 0
+    },
+    {
+      "nome": "SEND_LONG_REGISTER",
+      "tipo": "float",
+      "nulos": 0
+    },
+    {
+      "nome": "SEND_POP_REGISTER",
+      "tipo": "int32",
+      "nulos": 0
+    },
+    {
+      "nome": "RECEIVE_LOC_FEWF",
+      "tipo": "dictionary<values=string, indices=int16, ordered=0>",
+      "nulos": 0
+    },
+    {
+      "nome": "RECEIVE_CATEGORY_OHEWI",
+      "tipo": "dictionary<values=string, indices=int8, ordered=0>",
+      "nulos": 0
+    },
+    {
+      "nome": "RECEIVE_LAT",
+      "tipo": "double",
+      "nulos": 0
+    },
+    {
+      "nome": "RECEIVE_LONG",
+      "tipo": "double",
+      "nulos": 0
+    },
+    {
+      "nome": "TARGET_OMEGA",
+      "tipo": "int8",
+      "nulos": 0
+    }
+  ],
+  "categoricas_amostra": {
+    "TRANS_WEEK_OHEWI": {
+      "observacoes_amostra": 20000,
+      "categorias_distintas_na_amostra": 7,
+      "exemplos": [
+        "Friday",
+        "Monday",
+        "Saturday",
+        "Sunday",
+        "Thursday",
+        "Tuesday",
+        "Wednesday"
+      ]
+    },
+    "SEND_NAME_FEWF": {
+      "observacoes_amostra": 20000,
+      "categorias_distintas_na_amostra": 902,
+      "exemplos": [
+        "Aaron Murray",
+        "Aaron Pena",
+        "Aaron Rogers",
+        "Aaron Stewart",
+        "Adam Keller",
+        "Adam Kirk",
+        "Adam Mcdonald",
+        "Adam Riddle"
+      ]
+    },
+    "SEND_GENDER_BE": {
+      "observacoes_amostra": 20000,
+      "categorias_distintas_na_amostra": 2,
+      "exemplos": [
+        "F",
+        "M"
+      ]
+    },
+    "SEND_JOB_FEWF": {
+      "observacoes_amostra": 20000,
+      "categorias_distintas_na_amostra": 475,
+      "exemplos": [
+        "Academic librarian",
+        "Accountant, chartered certified",
+        "Accountant, chartered public finance",
+        "Accounting technician",
+        "Acupuncturist",
+        "Administrator",
+        "Administrator, arts",
+        "Administrator, charities/voluntary organisations"
+      ]
+    },
+    "RECEIVE_LOC_FEWF": {
+      "observacoes_amostra": 20000,
+      "categorias_distintas_na_amostra": 693,
+      "exemplos": [
+        "fraud_Abbott-Rogahn",
+        "fraud_Abbott-Steuber",
+        "fraud_Abernathy and Sons",
+        "fraud_Abshire PLC",
+        "fraud_Adams, Kovacek and Kuhlman",
+        "fraud_Adams-Barrows",
+        "fraud_Altenwerth, Cartwright and Koss",
+        "fraud_Altenwerth-Kilback"
+      ]
+    },
+    "RECEIVE_CATEGORY_OHEWI": {
+      "observacoes_amostra": 20000,
+      "categorias_distintas_na_amostra": 14,
+      "exemplos": [
+        "entertainment",
+        "food_dining",
+        "gas_transport",
+        "grocery_net",
+        "grocery_pos",
+        "health_fitness",
+        "home",
+        "kids_pets"
+      ]
+    }
+  },
+  "possiveis_variaveis_temporais": [
+    "TRANS_DAY",
+    "TRANS_WEEK_OHEWI",
+    "TRANS_YEAR_BE",
+    "TRANS_MONTH_SIN",
+    "TRANS_MONTH_COS",
+    "TRANS_HOUR_SIN",
+    "TRANS_HOUR_COS"
+  ],
+  "possiveis_identificadores_entidade": [
+    "TRANS_NUM_CARD_FEWF",
+    "SEND_NAME_FEWF"
+  ],
+  "ressalvas": [
+    "Inspeção descritiva: não foram ajustados encoders, PCA, t-SNE ou GMM.",
+    "Unicidade de ID avaliada somente em amostra; não comprova ausência de dependência entre transações.",
+    "Amostras de categorias não representam cardinalidade completa.",
+    "Antes de definir os folds, avaliar dependência temporal e agrupamentos por entidade.",
+    "Não utilizar o conjunto de teste final para escolher hiperparâmetros ou transformações."
+  ]
+}
