@@ -244,3 +244,24 @@ Data: 2026-10-18 00:47:22
 - Proxima tarefa: preparacao do cluster SLURM.
 - Detalhes: passos/07_visualizacao/resumo.md.
 
+
+## ETAPA 08 - PLANEJADA
+
+Data: 2026-10-18 00:53:53
+
+- Etapa dedicada a execucao local e auditoria completa.
+- Total: 22 subetapas.
+- PCA executado e auditado separadamente.
+- t-SNE executado e auditado separadamente.
+- Utilizar desenvolvimento completo F1-F9.
+- Comecar com um candidato por metodo.
+- Avaliar todos os arquivos de saida.
+- Inspecionar todas as metricas OOF.
+- Inspecionar todos os graficos aplicaveis.
+- Avaliar melhorias e executar novamente.
+- Validar cache, retomada e reproducibilidade.
+- F10 permanece reservado.
+- Somente apos a aprovacao seguir para o cluster.
+- Plano: passos/08_execucao_local/plano.md.
+- Proxima tarefa: 08.01.
+
