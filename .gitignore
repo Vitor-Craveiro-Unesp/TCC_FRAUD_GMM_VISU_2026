@@ -22,3 +22,4 @@ data/interim/
 *.pkl
 *.pickle
 *.joblib
+/Temp/
