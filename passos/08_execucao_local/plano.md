@@ -1,408 +1,459 @@
-﻿# ETAPA 08 - EXECUCAO LOCAL E AUDITORIA COMPLETA
+﻿# ETAPA 08 - VALIDACAO LOCAL PROGRESSIVA PCA E t-SNE
 
-Projeto: TCC_EXPERIMENTAL_V3
+Data: 2026-10-18 14:34:04
 
-Data de planejamento: 2026-10-18 00:53:53
+Status: PLANEJADA - VERSAO REVISADA
 
-Status: PLANEJADA
+Total: 30 subetapas.
 
-Total: 22 subetapas.
+## Objetivo
 
-## Objetivo geral
+Validar PCA e t-SNE inicialmente com 10% dos dados
+de desenvolvimento, auditando individualmente
+arquivos, metricas, graficos e resultados.
 
-Validar integralmente o pipeline em ambiente local,
-utilizando os dados completos de desenvolvimento
-e um numero reduzido de hiperparametros.
+Apos aprovar e corrigir os dois experimentos
+amostrais, executar novamente com 100% dos
+dados de desenvolvimento e repetir a auditoria.
 
-Executar separadamente PCA e t-SNE.
+Somente depois preparar o cluster universitario.
 
-Auditar todas as saidas, metricas, preditoes,
-graficos e diagnosticos de cada metodo.
+## Regras gerais
 
-Identificar melhorias, implementar correcoes,
-executar novamente quando necessario e
-somente depois preparar o cluster universitario.
-
-## Regras fundamentais
-
-- F1 a F9: desenvolvimento completo.
-- F10: reservado para o teste final independente.
-- Base de desenvolvimento: 1667155 registros.
-- Dados nunca reduzidos apenas para economizar
-  tempo na execucao local considerada completa.
-- Comecar com um candidato por metodo.
-- Grades pequenas apenas se forem necessarias.
+- F1 a F9 utilizados para desenvolvimento.
+- F10 reservado para avaliacao independente futura.
+- 10% do desenvolvimento na primeira fase.
+- 100% do desenvolvimento na segunda fase.
 - PCA e t-SNE executados separadamente.
-- Nenhum ajuste utilizando dados de validacao.
-- Limiar MCC selecionado somente no OOF.
-- Graficos preditivos usam predicoes OOF.
-- Graficos geometricos usam desenvolvimento.
-- Resultados exploratorios nao sao finais.
-- Nenhuma utilizacao do F10 nesta etapa.
+- Mesma amostra e mesmos folds para comparacao justa.
+- Amostragem estratificada e semente fixa.
+- Comecar com um candidato por metodo.
+- Aumentar hiperparametros somente se necessario.
+- GMM unico nao supervisionado.
+- Risco calculado com rotulos do treino original.
+- Pre-processamento e reducao ajustados no treino.
+- Limiar MCC obtido exclusivamente via OOF.
+- Grafico individual associado ao modelo vencedor.
+- Graficos comparativos podem envolver outros modelos.
+- Nenhum resultado de F10 nesta etapa.
+- Nenhuma execucao deve sobrescrever resultados validos.
 
-# BLOCO I - PREPARACAO
+# BLOCO I - PREPARACAO DOS ENSAIOS DE 10%
 
-## 08.01 - Auditoria de recursos computacionais
+## 08.01 - Auditoria inicial
 
-Objetivo:
-Verificar RAM, armazenamento, CPU, ambiente Python,
-integridade do Parquet e folds persistidos.
+Conferir dataset, folds, ambiente Python,
+dependencias, RAM, CPU, disco e Git.
 
-Verificacoes:
-- RAM disponivel e estimativa de pico.
-- Espaco livre e tamanho previsto dos resultados.
-- Versoes das bibliotecas.
-- Integridade de F1 a F10.
-- Cache, retomada e protecao de resultados.
-- Paralelismo adequado ao notebook.
+Verificar a separacao de F10.
 
-Conclusao:
-Ambiente local preparado para os testes reais.
+## 08.02 - Definicao da amostra comum de 10%
 
-## 08.02 - Configuracoes minimas oficiais locais
+Selecionar aproximadamente 10% de F1-F9.
 
-Objetivo:
-Preparar configuracoes independentes para PCA
-e t-SNE, sem modificar desnecessariamente
-o YAML oficial.
+Usar amostragem estratificada e deterministica,
+preservando os nove folds.
 
-Parametros iniciais:
-- PCA: n_components=2.
-- t-SNE: n_components=2.
-- GMM: K=2.
-- Amostragem: NORMAL.
-- Um candidato por metodo.
-- Nove folds de desenvolvimento.
-- F10 excluido.
+Garantir que PCA e t-SNE utilizem exatamente
+os mesmos registros e identificadores.
 
-Registrar configuracoes efetivamente utilizadas.
+Salvar manifesto de indices e prevalencia.
 
-# BLOCO II - PCA
+Nao utilizar F10.
 
-## 08.03 - Execucao PCA na base completa
+## 08.03 - Configuracoes dos experimentos
 
-Executar os nove folds OOF de desenvolvimento.
+Preparar dois experimentos independentes:
 
-Verificar:
-- Pre-processamento por fold.
-- PCA ajustado somente no treino.
-- GMM unico sem rotulos.
-- Risco historico usando treino original.
-- Predicoes nas validacoes.
-- Tempo e consumo de recursos.
+PCA:
+- Metodo PCA.
+- Inicialmente 2 componentes.
+- GMM K=2.
+- Modo NORMAL.
+- Nove folds OOF.
 
-## 08.04 - Auditoria de arquivos PCA
+t-SNE:
+- Metodo TSNE.
+- Inicialmente 2 componentes.
+- Perplexity=10.
+- Initialization=random.
+- GMM K=2.
+- Modo NORMAL.
+- Nove folds OOF.
 
-Inspecionar individualmente:
-- Pasta principal da execucao.
-- YAML salvo.
+Usar poucos hiperparametros.
+
+Registrar configuracoes e seeds.
+
+# BLOCO II - PCA COM 10%
+
+## 08.04 - Execucao PCA amostral
+
+Executar o pipeline PCA com 10%.
+
+Registrar tempo, memoria e logs.
+
+Confirmar nove folds finalizados.
+
+## 08.05 - Auditoria dos arquivos PCA
+
+Examinar individualmente:
+
+- Configuracao salva.
 - Manifestos.
-- Arquivos de cache.
-- Predicoes OOF.
+- Logs.
 - Resultados da grade.
-- Metricas.
 - Melhor configuracao.
-- Logs e relatorios.
+- Predicoes OOF.
+- Metricas.
+- Limiar MCC.
+- Cache.
+- Relatorios.
 - Pastas de graficos.
+- Galeria HTML.
 
-Verificar ausencia de arquivos incompletos,
-duplicados, inconsistentes ou inesperados.
+Conferir arquivos ausentes, duplicados,
+corrompidos ou inconsistentes.
 
-## 08.05 - Auditoria estatistica PCA
+## 08.06 - Auditoria das predicoes PCA
 
-Verificar:
-- Quantidade de preditos por fold.
-- Cobertura de todos os registros F1-F9.
-- Ausencia de duplicacoes.
-- Distribuicao das probabilidades.
-- AP e prevalencia.
-- MCC e limiar selecionado.
-- LogLoss.
-- Score composto.
-- Valores extremos e probabilidades invalidas.
-- Correspondencia entre CSV, JSON e logs.
+Conferir quantidade de preditos.
 
-## 08.06 - Graficos preditivos PCA
+Verificar correspondencia com cada fold.
 
-Avaliar individualmente:
+Verificar probabilidades entre 0 e 1.
+
+Recalcular e conferir AP, MCC, LogLoss,
+prevalencia e score composto.
+
+Confirmar que F10 nao foi utilizado.
+
+## 08.07 - Graficos preditivos PCA
+
+Inspecionar um por um:
+
 01 - Precision-Recall.
 02 - MCC por limiar.
-03 - Matriz de confusao com 0.5.
+03 - Matriz de confusao com limiar 0.5.
 04 - Matriz de confusao com MCC otimo.
 05 - Distribuicao dos scores.
 06 - Comparacao de hiperparametros.
 
-Inspecionar valores, escalas, legendas,
-cores, resolucao, titulos e interpretacao.
+Conferir valores, escalas, cores,
+legendas, titulos e interpretacao.
 
-## 08.07 - Diagnosticos das gaussianas PCA
+## 08.08 - Graficos gaussianos PCA
 
-Avaliar individualmente:
+Inspecionar um por um:
+
 07 - Risco historico por gaussiana.
 08 - Pesos e responsabilidades.
-09 - Medias dos componentes.
-10 - Covariancias.
+09 - Medias das gaussianas.
+10 - Covariancias das gaussianas.
 
-Conferir massas, riscos, responsabilidades,
-normalizacao e consistencia numerica.
+Conferir parametros numericos e
+correspondencia com o modelo ajustado.
 
-Verificar se os graficos representam
-corretamente os parametros ajustados.
+## 08.09 - Geometria e mapas PCA
 
-## 08.08 - Geometria e fronteira PCA
+Inspecionar:
 
-Avaliar individualmente:
 11 - Variancia explicada pelo PCA.
-12 - Projecoes dos dados.
+12 - Projecoes PCA.
 15 - Mapa de risco e fronteira.
 
-Verificar:
-- Coordenadas e dimensoes corretas.
-- Nuvens gaussianas e elipses.
-- Classes legitimas e fraudulentas.
-- Campo de risco.
-- Contorno do limiar MCC.
-- Coerencia geometrica.
-- Tratamento de PCA 1D, 2D e 3D.
+Examinar tambem o mapa complementar 2D,
+quando aplicavel e disponivel.
 
-O mapa complementar 2D deve ser identificado
-como adicional quando nao representar o vencedor.
+Avaliar elipses, nuvens, classes,
+campo de risco e corte MCC.
 
-## 08.09 - Melhorias e correcoes PCA
+## 08.10 - Melhorias e aprovacao PCA 10%
 
-Revisar:
-- Escalas lineares e logaritmicas.
-- Transparencia e sobreposicao de pontos.
-- Cores e contraste.
-- Tamanho de fontes.
-- Posicao e conteudo das legendas.
-- Organizacao das figuras.
-- Informacoes estatisticas exibidas.
-- Clareza na interpretacao dos riscos.
-- Exportacao PNG, CSV e manifestos.
+Identificar erros e melhorias.
 
-Modificar codigo somente quando necessario.
+Modificar graficos ou codigo quando necessario.
 
-## 08.10 - Revalidacao completa PCA
+Reexecutar somente o que for afetado.
 
-Apos ajustes:
-- Executar testes automatizados.
-- Gerar novamente os graficos afetados.
-- Conferir resultados numericos.
-- Validar persistencia e integridade.
-- Documentar correcoes.
-- Aprovar formalmente PCA.
+Registrar correcoes e aprovar o ensaio PCA.
 
-# BLOCO III - t-SNE
+# BLOCO III - t-SNE COM 10%
 
-## 08.11 - Viabilidade computacional t-SNE
+## 08.11 - Preflight t-SNE
 
-Verificar o custo de ajustar t-SNE em todos
-os folds do desenvolvimento completo.
+Avaliar memoria, tempo e viabilidade
+do ajuste openTSNE na amostra de 10%.
 
-Avaliar:
-- RAM.
-- Tempo de processamento.
-- Armazenamento.
-- Implementacao openTSNE.
-- Transformacao de novos registros.
-- Estabilidade das coordenadas.
+Verificar transformacao da validacao.
 
-Executar ensaio tecnico progressivo se necessario.
+Nao iniciar carga excessiva sem estimativa.
 
-Nao iniciar a execucao integral se os recursos
-forem insuficientes.
+## 08.12 - Execucao t-SNE amostral
 
-## 08.12 - Preparacao da configuracao t-SNE
+Executar nove folds com a mesma amostra de
+10% utilizada no experimento PCA.
 
-Parametros iniciais:
-- Metodo: TSNE.
-- n_components=2.
-- perplexity=10.
-- initialization=random.
-- Um GMM com K=2.
-- Amostragem NORMAL.
+Registrar tempo, memoria e logs.
 
-Verificar compatibilidade dos hiperparametros,
-sementes e divisao treino-validacao.
+## 08.13 - Auditoria dos arquivos t-SNE
 
-## 08.13 - Execucao t-SNE no desenvolvimento
+Inspecionar individualmente configuracao,
+manifestos, logs, embeddings, predicoes OOF,
+metricas, ranking, limiar, cache,
+relatorios, graficos e galeria.
 
-Executar F1-F9 completos quando for viavel.
+Verificar integridade e rastreabilidade.
 
-Conferir:
-- t-SNE ajustado somente no treino.
-- Transformacao dos dados de validacao.
-- GMM unico sem rotulos.
-- Risco por responsabilidades.
-- Predicoes OOF.
-- Tempo e consumo de recursos.
+## 08.14 - Auditoria estatistica t-SNE
 
-Registrar qualquer limite computacional real.
+Conferir AP, MCC, LogLoss, score composto,
+limiar MCC e distribuicao dos scores.
 
-## 08.14 - Auditoria de arquivos t-SNE
+Verificar cobertura e isolamento dos folds.
 
-Inspecionar individualmente:
-- Configuracao.
-- Manifestos.
-- Cache.
-- Embeddings e seus metadados.
-- Predicoes.
-- Metricas.
-- Ranking.
-- Melhor configuracao.
-- Logs.
-- Graficos.
-- Relatorios.
+Conferir que os embeddings da validacao
+foram transformados sem reajustar no fold.
 
-Confirmar que nao houve mistura de
-coordenadas provenientes de folds distintos.
+## 08.15 - Graficos preditivos t-SNE
 
-## 08.15 - Metricas e graficos OOF t-SNE
+Inspecionar individualmente os tipos 01 a 06.
 
-Auditar:
-- AP.
-- MCC.
-- Limiar otimo.
-- LogLoss.
-- Score composto.
-- Distribuicao dos scores.
-
-Avaliar graficos 01 a 06 individualmente.
-
-Conferir valores, curvas, escalas e legendas.
+Conferir curvas, limiares, matrizes,
+distribuicao e comparacao de candidatos.
 
 ## 08.16 - Gaussianas no espaco t-SNE
 
-Avaliar graficos:
-07 - Risco historico por gaussiana.
-08 - Pesos e responsabilidades.
-09 - Medias dos componentes.
-10 - Covariancias.
+Inspecionar individualmente os tipos 07 a 10.
 
-Verificar se gaussianas e responsabilidades
-correspondem ao espaco t-SNE efetivamente
-utilizado no ajuste do GMM.
+Avaliar risco, responsabilidades,
+pesos, medias e covariancias.
 
-## 08.17 - Geometria e fronteira t-SNE
+## 08.17 - Geometria, melhorias e aprovacao t-SNE
 
-Avaliar:
+Inspecionar:
+
 13 - Projecao t-SNE.
-14 - Diagnostico de otimizacao t-SNE.
+14 - Diagnosticos de otimizacao, se disponiveis.
 15 - Mapa de risco e fronteira.
 
-Verificar:
-- Posicao e separacao dos grupos.
-- Sobreposicao de classes.
-- Perda de informacao visual.
-- Diagnosticos de convergencia disponiveis.
-- Elipses gaussianas.
-- Regioes de risco.
-- Fronteira MCC.
-- Legendas e cores.
+Analisar nuvens gaussianas, elipses,
+sobreposicao de classes e campo de risco.
 
-Evitar interpretar distancias globais do
-t-SNE como distancias estatisticas originais.
+Corrigir problemas e revalidar.
 
-## 08.18 - Melhorias e revalidacao t-SNE
+# BLOCO IV - COMPARACAO E APROVACAO DOS 10%
 
-Ajustar se necessario:
-- Escalas.
-- Cores.
-- Transparencia.
-- Numero de pontos visualizados.
-- Legendas.
-- Representacao das responsabilidades.
-- Desenho das gaussianas.
-- Fronteira de decisao.
-- Performance computacional.
+## 08.18 - Conferencia da comparabilidade
 
-Reexecutar testes e visualizacoes afetadas.
+Verificar que PCA e t-SNE usaram:
+- Mesmos identificadores.
+- Mesmos registros.
+- Mesmos nove folds.
+- Mesma variavel alvo.
+- Mesmo protocolo de metricas.
 
-Aprovar formalmente t-SNE quando validado.
+Registrar diferencas metodologicas.
 
-# BLOCO IV - AUDITORIA FINAL
+## 08.19 - Comparacao quantitativa
 
-## 08.19 - Comparacao PCA versus t-SNE
-
-Comparar:
+Criar tabela comparativa de:
 - AP.
 - MCC.
 - LogLoss.
 - Score composto.
+- Limiar selecionado.
 - Tempo de execucao.
-- Memoria.
-- Persistencia.
-- Qualidade dos diagnosticos.
-- Facilidade de interpretacao.
+- Consumo de memoria.
+- Dimensoes.
+- Numero de gaussianas.
 
-As comparacoes so serao conclusivas quando
-ambos usarem os mesmos registros de
-desenvolvimento e protocolo de validacao.
+Nao confundir ensaio com selecao final.
 
-## 08.20 - Cache, retomada e reproducibilidade
+## 08.20 - Graficos comparativos PCA x t-SNE
 
-Verificar para ambos os metodos:
-- Interrupcao controlada.
-- Retomada por fold.
-- Reutilizacao de cache compativel.
-- Protecao contra sobrescrita.
-- Identificacao das configuracoes.
-- Determinismo quando aplicavel.
-- Consistencia de preditos e metricas.
-- Integridade dos arquivos persistidos.
+Gerar e avaliar:
 
-## 08.21 - Auditoria final de todos os outputs
+- Precision-Recall sobrepostas.
+- MCC por limiar comparado.
+- Distribuicoes dos scores.
+- Barras de AP e MCC.
+- Comparacao de LogLoss.
+- Comparacao de score composto.
+- Tempo e custo computacional.
+- Matrizes de confusao lado a lado.
+- Sintese visual das configuracoes.
 
-Examinar pasta por pasta e arquivo por arquivo.
+Os graficos comparativos sao adicionais
+ao catalogo de 15 tipos do YAML.
 
-Verificar:
-- Nomes e organizacao.
-- Integridade dos arquivos.
-- Coerencia CSV/JSON/NPZ.
-- Todos os graficos habilitados aplicaveis.
-- Manifestos de geracao.
-- Resolucao e legibilidade.
-- Dados de origem.
-- Metadados e rastreabilidade.
-- Ausencia de uso de F10.
+## 08.21 - Revisao visual e interpretativa
 
-Registrar melhorias futuras separadamente
-das correcoes obrigatorias.
+Revisar todos os graficos dos dois metodos.
 
-## 08.22 - Encerramento e aprovacao local
+Avaliar:
+- Titulo.
+- Eixos e unidades.
+- Escala linear ou logaritmica.
+- Legendas.
+- Cores.
+- Contraste.
+- Tamanho dos pontos.
+- Transparencia.
+- Sobreposicao.
+- Resolucao.
+- Formato.
+- Clareza estatistica.
+- Coerencia com os arquivos numericos.
 
-Executar a suite final de testes.
+## 08.22 - Revisao dos arquivos de saida
 
-Documentar:
-- Recursos utilizados.
-- Configuracoes.
-- Tempos.
-- Metricas.
-- Graficos aprovados.
+Conferir cada arquivo de cada experimento.
+
+Criar checklist de:
+- Nome.
+- Localizacao.
+- Formato.
+- Finalidade.
+- Conteudo esperado.
+- Conteudo encontrado.
+- Integridade.
+- Resultado aprovado ou pendente.
+
+## 08.23 - Correcoes e repeticoes
+
+Corrigir problemas estatisticos,
+computacionais, visuais e de persistencia.
+
+Distinguir correcoes obrigatorias
+de melhorias apenas esteticas.
+
+Repetir testes ou execucoes quando necessario.
+
+## 08.24 - Aprovacao dos experimentos de 10%
+
+Executar suite automatizada.
+
+Conferir manifestos e outputs.
+
+Documentar PCA e t-SNE separadamente.
+
+Somente aprovar quando todos os
+criterios obrigatorios forem atendidos.
+
+# BLOCO V - BASE COMPLETA DE DESENVOLVIMENTO
+
+## 08.25 - Preparacao da execucao completa
+
+Utilizar 100% do desenvolvimento F1-F9.
+
+Total esperado: 1667155 transacoes.
+
+F10 permanece com 185239 transacoes
+reservadas para teste final.
+
+Fazer novo preflight de RAM, CPU e disco.
+
+Para t-SNE, avaliar especialmente
+viabilidade em escala de milhoes
+de registros e uso de memoria.
+
+Manter configuracoes pequenas.
+
+## 08.26 - Execucao PCA 100%
+
+Executar um candidato PCA com nove folds.
+
+Registrar tempo, memoria e outputs.
+
+Validar funcionamento em escala completa.
+
+## 08.27 - Auditoria completa PCA 100%
+
+Inspecionar novamente:
+- Cada arquivo de saida.
+- Cada metrica.
+- Cada grafico aplicavel.
+- Gaussianas e responsabilidades.
+- Fronteira e campo de risco.
+- Cache e manifestos.
+- Integridade dos nove folds.
+
+## 08.28 - Execucao t-SNE 100%
+
+Executar um candidato t-SNE com nove folds
+somente apos aprovar a viabilidade computacional.
+
+Monitorar memoria, tempo e estabilidade.
+
+Se nao couber no notebook, documentar
+o impedimento e nao marcar como concluido.
+
+## 08.29 - Auditoria completa t-SNE 100%
+
+Inspecionar novamente todos os outputs,
+metricas e graficos aplicaveis.
+
+Comparar PCA e t-SNE sobre os mesmos dados
+de desenvolvimento completo.
+
+Registrar limitações e correcoes.
+
+## 08.30 - Encerramento da Etapa 08
+
+Conferir:
+- Execucoes 10% aprovadas.
+- PCA completo aprovado.
+- t-SNE completo aprovado ou impedimento
+  computacional formalmente documentado.
 - Arquivos auditados.
-- Correcoes efetuadas.
-- Limitacoes observadas.
-- Pendencias remanescentes.
-- Recomendacoes para o cluster.
+- Graficos auditados.
+- Comparacoes consistentes.
+- Cache e retomada validados.
+- F10 preservado.
+- Testes automatizados aprovados.
+- Correcões documentadas.
 
-Atualizar:
-- Registros de cada subetapa.
-- Resumo da Etapa 08.
-- CONTEXTO_GERAL.md.
-- requirements.txt, quando necessario.
-- Git, com checkpoint final.
+Gerar:
+- registro.md por subetapa.
+- resumo.md da Etapa 08.
+- Atualizacao de CONTEXTO_GERAL.md.
+- Atualizacao de RETOMADA.md.
+- Checkpoint Git.
 
-Status final possivel:
-- VALIDADO PARA CLUSTER.
-- VALIDADO COM RESSALVAS.
-- BLOQUEADO POR LIMITACAO OU ERRO.
+Registrar decisao de prontidao
+para o cluster universitario.
 
-A Etapa 09 somente sera iniciada apos a
-decisao formal sobre a validacao local.
+## CATALOGO DE 15 GRAFICOS
 
-# PROXIMA TAREFA
+01 - Precision-Recall.
+02 - MCC por limiar.
+03 - Matriz de confusao 0.5.
+04 - Matriz de confusao MCC.
+05 - Distribuicao de scores.
+06 - Comparacao da grade.
+07 - Risco por gaussiana.
+08 - Pesos e responsabilidades.
+09 - Medias gaussianas.
+10 - Covariancias gaussianas.
+11 - Variancia PCA.
+12 - Projecao PCA.
+13 - Projecao t-SNE.
+14 - Diagnosticos t-SNE.
+15 - Mapa de risco e fronteira.
 
-08.01 - Auditoria de recursos computacionais.
+Graficos especificos de PCA nao sao
+obrigatorios em uma execucao t-SNE.
 
-ETAPA 08 - PLANEJADA.
+Graficos especificos de t-SNE nao sao
+obrigatorios em uma execucao PCA.
+
+Gráficos adicionais:
+- Mapa complementar PCA 2D.
+- Comparacoes entre PCA e t-SNE.
+
+## PROXIMA TAREFA
+
+08.01 - Auditoria inicial.
+
+ETAPA 08 - PLANEJAMENTO REVISADO.

@@ -18,7 +18,8 @@ import warnings
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Rectangle, FancyBboxPatch
+from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 import pandas as pd
 import yaml
@@ -30,6 +31,7 @@ from sklearn.metrics import (
 
 
 ARQUIVOS = {
+    'painel_score_composto': '00_painel_score_composto',
     'curva_pr': '01_curva_precision_recall',
     'curva_mcc': '02_mcc_por_limiar',
     'matriz_confusao_05': '03_matriz_confusao_05',
@@ -116,7 +118,14 @@ def _ler_resultados(experimento: Path):
 
 def _ativado(config: dict, nome: str, fase='oof') -> bool:
     visu = config.get('visualizacao', {})
-    g = visu.get('graficos', {}).get(nome, {})
+    graficos = visu.get('graficos', {})
+    g = graficos.get(nome, {})
+    # Compatibilidade: YAML de ensaios anteriores a criação do Painel 00.
+    # Esses YAMLs continuam imutáveis; não habilitar se a chave existe e está False.
+    if nome == 'painel_score_composto' and nome not in graficos:
+        return (visu.get('habilitar') is True
+                and config.get('saidas', {}).get('salvar_graficos', True) is True
+                and fase == 'oof' and fase in visu.get('gerar_em', []))
     return (visu.get('habilitar', False) is True
             and config.get('saidas', {}).get('salvar_graficos', True) is True
             and g.get('habilitar') is True
@@ -178,173 +187,822 @@ def _mcc_curva_exata(y, p):
     return s[fim], valores
 
 
-def _plot_pr(config, y, p, vencedor, destino, ext, dpi, dados):
-    op = _op(config,'curva_pr')
-    prec, rec, _ = precision_recall_curve(y,p)
-    fig, ax = _figura(config)
-    rotulo = f'Vencedor — AP={float(vencedor["ap"]):.5f}' if op.get('mostrar_ap',True) else 'Vencedor OOF'
-    ax.plot(rec,prec, lw=1.5, label=rotulo)
-    if op.get('mostrar_baseline_prevalencia',True):
-        ax.axhline(float(np.mean(y)),ls='--',lw=1,color='gray',label=f'Prevalência = {np.mean(y):.3%}')
-    ax.set(xlabel='Revocação (Recall)', ylabel='Precisão (Precision)',
-           xlim=op.get('limites_recall',[0,1]), ylim=op.get('limites_precision',[0,1]))
-    if config['visualizacao']['padrao'].get('titulo',True):
-        ax.set_title('01 — Curva Precision–Recall | Vencedor OOF')
-    ax.grid(config['visualizacao']['padrao'].get('grade',True), alpha=.25)
-    if config['visualizacao']['padrao'].get('legenda',True): ax.legend()
-    _salvar(fig,_caminho_png(destino,'curva_pr',ext),dpi=dpi)
+def _numeros_painel_00(y, p, vencedor, escolha):
+    """Quatro indicadores do catálogo: todos calculados do MESMO OOF."""
+    ap = float(average_precision_score(y, p))
+    mcc = float(matthews_corrcoef(y, p >= float(escolha['limiar_mcc_oof'])))
+    loss = float(log_loss(y, p, labels=[0, 1]))
+    mcc_01 = (mcc + 1.0) / 2.0
+    loss_01 = float(np.exp(-loss))
+    composto = (ap + mcc_01 + loss_01) / 3.0
+    for nome, valor in [('ap', ap), ('mcc', mcc), ('logloss', loss), ('score', composto)]:
+        _numero_proximo(valor, vencedor[nome], f'Painel 00: {nome}', atol=1e-7)
+    return {
+        'ap': ap, 'prevalencia_oof': float(np.mean(y)),
+        'mcc_bruto': mcc, 'mcc_01': mcc_01,
+        'logloss_bruto': loss, 'logloss_01': loss_01,
+        'score_composto': composto,
+        'limiar_mcc_oof': float(escolha['limiar_mcc_oof']),
+        'n_oof': int(len(y)),
+    }
+
+
+def _plot_painel_00(config, y, p, vencedor, escolha, destino, ext, dpi, dados):
+    """Painel escuro e quatro barras 0–1 seguindo catálogo em PDF.
+
+    Não rotula valores como bom/médio/ruim, não usa números simulados.
+    """
+    v = _numeros_painel_00(y, p, vencedor, escolha)
+    tema = config['visualizacao']['graficos'].get('painel_score_composto', {})
+    cor_fundo = tema.get('cor_fundo', '#07101f')
+    cor_cartao = tema.get('cor_cartao', '#111d33')
+    cor_texto = '#edf4ff'
+    cor_suave = '#b7c9e2'
+    cor_borda = '#345273'
+    cmap = LinearSegmentedColormap.from_list(
+        'escala_descritiva_00', ['#d6333a', '#f26b29', '#f0d94c', '#87c646', '#1b9e62'])
+    # Apenas layout; nunca altera as probabilidades ou métricas OOF.
+    tamanho = np.asarray(tema.get('figsize', [10.2, 15.0]), dtype=float)
+    _exigir(tamanho.shape == (2,) and np.isfinite(tamanho).all()
+            and (tamanho > 0).all(), 'painel_score_composto.figsize invalido.')
+    fonte_titulo = float(tema.get('fonte_titulo', 21))
+    fonte_secundaria = float(tema.get('fonte_secundaria', 10.5))
+    fonte_rodape = float(tema.get('fonte_rodape', 9.6))
+    _exigir(all(np.isfinite(f) and 6 <= f <= 36 for f in
+                (fonte_titulo, fonte_secundaria, fonte_rodape)),
+            'Fontes do Painel 00 fora de 6..36.')
+    fig = plt.figure(figsize=tuple(tamanho), facecolor=cor_fundo)
+    fig.text(.075, .967, 'PAINEL 00', color='#7ac8fd', fontsize=12, weight='bold')
+    fig.text(.075, .932, 'Indicadores de desempenho e score composto',
+             color=cor_texto, fontsize=fonte_titulo, weight='bold')
+    fig.text(.075, .901, 'Vencedor OOF  |  AP · MCC transformado · LogLoss transformado · média',
+             color=cor_suave, fontsize=fonte_secundaria)
+
+    cards = [
+        ('AP — Average Precision',
+         'Capacidade de identificar e ordenar fraudes em base desbalanceada.',
+         'AP', v['ap'], f"Baseline PR (prevalência): {v['prevalencia_oof']:.3f}",
+         'Comparar a AP com a prevalência de fraudes.'),
+        ('MCC — Matthews Correlation Coefficient',
+         'Qualidade da classificação, considerando VP, VN, FP e FN.',
+         '(MCC + 1) / 2', v['mcc_01'], f"MCC bruto: {v['mcc_bruto']:.3f}",
+         'MCC calculado no limiar ótimo OOF.'),
+        ('LogLoss',
+         'Qualidade das probabilidades previstas; menor LogLoss é melhor.',
+         'exp(-LogLoss)', v['logloss_01'], f"LogLoss bruto: {v['logloss_bruto']:.3f}",
+         'Transformação para escala 0–1; maior é melhor.'),
+        ('Score composto',
+         'Síntese dos três critérios com pesos iguais.',
+         'S = [AP + (MCC+1)/2 + exp(-LogLoss)] / 3', v['score_composto'],
+         'Três parcelas com peso 1/3',
+         'Score interno do TCC; não é uma métrica padronizada da literatura.'),
+    ]
+    carta_h = .181
+    for idx, (titulo, descricao, formula, valor, nota, detalhe) in enumerate(cards):
+        fundo_y = .695 - idx * .197
+        fig.add_artist(FancyBboxPatch((.065, fundo_y), .87, carta_h,
+            boxstyle='round,pad=0.006,rounding_size=0.021',
+            transform=fig.transFigure, linewidth=1, edgecolor=cor_borda,
+            facecolor=cor_cartao))
+        fig.text(.09, fundo_y+.155, titulo, color=cor_texto, fontsize=12, weight='bold')
+        fig.text(.09, fundo_y+.137, descricao, color=cor_suave, fontsize=fonte_secundaria)
+        fig.add_artist(FancyBboxPatch((.09, fundo_y+.101), .82, .023,
+            boxstyle='round,pad=0.004,rounding_size=0.006',
+            transform=fig.transFigure, linewidth=.8,
+            edgecolor=cor_borda, facecolor='#0d1a2e'))
+        fig.text(.103, fundo_y+.107, formula, color=cor_texto, fontsize=fonte_secundaria)
+        fig.text(.09, fundo_y+.068, f'{valor:.3f}'.replace('.', ','),
+                 color=cmap(np.clip(valor,0,1)), fontsize=24, weight='bold')
+        fig.text(.91, fundo_y+.073, 'escala 0–1', color=cor_suave,
+                 fontsize=fonte_secundaria-1, ha='right')
+        bar = fig.add_axes([.09, fundo_y+.048, .82, .010])
+        bar.set_zorder(10)
+        bar.imshow(np.linspace(0,1,600)[None,:], origin='lower',
+                   cmap=cmap, extent=(0,1,0,1), aspect='auto', interpolation='bicubic')
+        bar.axvline(np.clip(valor,0,1), color='#eaf3ff', lw=2.7)
+        bar.set(xlim=(0,1), ylim=(0,1)); bar.axis('off')
+        fig.text(.09, fundo_y+.029, nota.replace('.', ','),
+                 color=cor_texto, fontsize=fonte_secundaria, weight='bold')
+        fig.text(.09, fundo_y+.010, detalhe, color=cor_suave, fontsize=fonte_secundaria-0.3)
+
+    fig.text(.075, .079,
+             f"S = [AP + (MCC(τ*)+1)/2 + exp(-LogLoss)]/3 = {v['score_composto']:.3f}".replace('.', ','),
+             fontsize=fonte_secundaria+0.5, color=cor_texto, weight='bold')
+    # Leitura do PDF: cores são uma referência relativa, sem diagnóstico universal.
+    fig.text(.075, .054,
+             'Interpretação: vermelho → menor; amarelo → intermediário; verde → maior.',
+             fontsize=fonte_rodape, color=cor_texto, weight='bold')
+    fig.text(.075, .035,
+             'As cores não definem qualidade universal. Compare AP com a prevalência',
+             fontsize=fonte_rodape, color=cor_suave)
+    fig.text(.075, .022,
+             'e LogLoss com uma previsão de referência (ex.: prevalência constante).',
+             fontsize=fonte_rodape, color=cor_suave)
+    fig.text(.075, .008,
+             f"Dados: OOF F1–F9; n={v['n_oof']:,}; τ*={v['limiar_mcc_oof']:.6g}; F10 não utilizado",
+             fontsize=fonte_rodape-0.3, color=cor_suave)
+    _salvar(fig, _caminho_png(destino, 'painel_score_composto', ext), dpi=dpi)
     if dados:
-        _csv_protegido(pd.DataFrame({'recall':rec,'precision':prec}),destino/'01_curva_precision_recall.csv')
+        tabela = pd.DataFrame([
+            {'indicador':'AP','valor_bruto':v['ap'],'transformacao':'identidade',
+             'valor_0_a_1':v['ap'],'baseline_prevalencia':v['prevalencia_oof']},
+            {'indicador':'MCC','valor_bruto':v['mcc_bruto'],'transformacao':'(MCC+1)/2',
+             'valor_0_a_1':v['mcc_01'],'baseline_prevalencia':np.nan},
+            {'indicador':'LogLoss','valor_bruto':v['logloss_bruto'],'transformacao':'exp(-LogLoss)',
+             'valor_0_a_1':v['logloss_01'],'baseline_prevalencia':np.nan},
+            {'indicador':'Score composto','valor_bruto':v['score_composto'],
+             'transformacao':'media das tres parcelas',
+             'valor_0_a_1':v['score_composto'],'baseline_prevalencia':np.nan},
+        ])
+        tabela['limiar_mcc_oof'] = v['limiar_mcc_oof']
+        tabela['n_oof'] = v['n_oof']
+        _csv_protegido(tabela, destino/'00_painel_score_composto.csv')
+    return v
+
+
+def _ponto_operacional_pr(y, p, limiar):
+    """Precisao e recall obtidos das classificacoes OOF no corte informado.
+
+    Uma classificacao sem positivos previstos possui precisao indefinida;
+    usamos 0 somente para representar numericamente o ponto operacional.
+    """
+    _exigir(np.isfinite(limiar) and 0 <= limiar <= 1,
+            'Limiar PR fora do intervalo [0,1].')
+    pred = p >= limiar
+    total_prev = int(np.count_nonzero(pred))
+    tp = int(np.count_nonzero(pred & (y == 1)))
+    return {'limiar':float(limiar), 'precision':float(tp/total_prev) if total_prev else 0.0,
+            'recall':float(tp/np.count_nonzero(y == 1)),
+            'positivos_previstos':total_prev, 'verdadeiros_positivos':tp,
+            'precision_definida':bool(total_prev)}
+
+
+def _limites_zoom_pr(config, ponto_mcc, prevalencia):
+    """Define enquadramento visual, sem descartar ou recalcular dados OOF.
+
+    O inicio da PR pode ter valores acima do teto do zoom. Esta limitacao
+    do enquadramento deve ser informada no rodape, sem miniatura interna.
+    """
+    op = _op(config, 'curva_pr')
+    modo = op.get('modo_eixos', 'zoom_automatico')
+    _exigir(modo in ('zoom_automatico', 'manual'),
+            'curva_pr.modo_eixos deve ser zoom_automatico ou manual.')
+    if modo == 'manual':
+        limites_x = np.asarray(op.get('limites_recall', [0, 1]), dtype=float)
+        limites_y = np.asarray(op.get('limites_precision', [0, 1]), dtype=float)
+        _exigir(limites_x.shape == limites_y.shape == (2,) and
+                np.isfinite(limites_x).all() and np.isfinite(limites_y).all() and
+                0 <= limites_x[0] < limites_x[1] <= 1 and
+                0 <= limites_y[0] < limites_y[1] <= 1,
+                'Limites manuais PR invalidos.')
+        return tuple(limites_x), tuple(limites_y), False
+
+    alvo_x = float(op.get('zoom_recall_alvo', 0.35))
+    alvo_y = float(op.get('zoom_precision_alvo', 0.08))
+    _exigir(np.isfinite([alvo_x, alvo_y]).all() and
+            0 < alvo_x <= 1 and 0 < alvo_y <= 1,
+            'Zoom PR deve estar no intervalo (0,1].')
+    # Um minimo de zoom orientado pelo ponto MCC; jamais esconde esse ponto.
+    max_x = min(1.0, max(alvo_x, ponto_mcc['recall'] * 1.12))
+    max_y = min(1.0, max(alvo_y, ponto_mcc['precision'] * 1.35,
+                          prevalencia * 2.0))
+    return (0.0, max_x), (0.0, max_y), True
+
+
+def _plot_pr(config, y, p, vencedor, escolha, destino, ext, dpi, dados):
+    """Curva PR unificada, com ampliacao visual e sem miniatura interna.
+
+    O zoom e exclusivamente visual. Nenhum limiar, metrica ou predito muda.
+    """
+    op = _op(config, 'curva_pr')
+    prec, rec, _ = precision_recall_curve(y, p)
+    ap = float(average_precision_score(y, p))
+    prevalencia = float(np.mean(y))
+    _numero_proximo(ap, vencedor['ap'], 'AP na curva PR', atol=1e-7)
+    tau = float(escolha['limiar_mcc_oof'])
+    pontos = [
+        ('MCC OOF', _ponto_operacional_pr(y, p, tau), '#178f66', 'o'),
+        ('Fixo 0,50', _ponto_operacional_pr(y, p, 0.5), '#cf4044', 'X'),
+    ]
+    pt_mcc = pontos[0][1]
+    pt_fixo = pontos[1][1]
+    xlim, ylim, ampliado = _limites_zoom_pr(config, pt_mcc, prevalencia)
+    ocultar_fixo = bool(op.get('ocultar_ponto_05_degenerado', True))
+    fixo_degenerado = (pt_fixo['positivos_previstos'] == 0 or
+                         (pt_fixo['recall'] == 0 and pt_fixo['precision'] == 0))
+    mostrar_fixo = (op.get('mostrar_ponto_05', True) is True and
+                    not (ocultar_fixo and fixo_degenerado))
+
+    fig, ax = plt.subplots(figsize=(10.5, 6.5))
+    # Rodape de menor altura que a versao anterior (.34 -> .19).
+    fig.subplots_adjust(left=.105, right=.955, bottom=.195, top=.81)
+    ax.plot(rec, prec, color='#21558c', linewidth=1.8,
+            label=f'PR OOF · AP={ap:.5f}' if op.get('mostrar_ap', True)
+                  else 'PR OOF')
+    if op.get('mostrar_baseline_prevalencia', True):
+        ax.axhline(prevalencia, ls='--', lw=1.35, color='#8a736b',
+                   label=f'Prevalência={prevalencia:.4%}')
+    if op.get('mostrar_ponto_mcc_oof', True):
+        ax.scatter([pt_mcc['recall']], [pt_mcc['precision']],
+                   color=pontos[0][2], marker=pontos[0][3],
+                   s=85, zorder=7, edgecolors='white', linewidths=.9,
+                   label=f'τ*={tau:.5g} · P={pt_mcc["precision"]:.3f} · R={pt_mcc["recall"]:.3f}')
+    if mostrar_fixo:
+        ax.scatter([pt_fixo['recall']], [pt_fixo['precision']],
+                   color=pontos[1][2], marker=pontos[1][3],
+                   s=80, zorder=8, linewidths=1.1,
+                   label=f'τ=0,50 · P={pt_fixo["precision"]:.3f} · R={pt_fixo["recall"]:.3f}')
+
+    ax.set(xlabel='Recall — fraudes identificadas',
+           ylabel='Precision — fraudes entre alertas',
+           xlim=xlim, ylim=ylim)
+    if config['visualizacao']['padrao'].get('titulo', True):
+        fig.suptitle('01 — Curva Precision–Recall | vencedor OOF',
+                     fontsize=13, y=.988)
+    if ampliado:
+        fig.text(.105, .942,
+                 f'Zoom de leitura: Recall 0–{xlim[1]:.2f}; Precision 0–{ylim[1]:.3f}  '
+                 '(a AP utiliza toda a curva OOF)',
+                 fontsize=9, color='#52647a', va='top')
+    ax.grid(config['visualizacao']['padrao'].get('grade', True), alpha=.22)
+    if config['visualizacao']['padrao'].get('legenda', True):
+        # Legenda fora da malha, sem cobrir a curva proxima de zero.
+        fig.legend(*ax.get_legend_handles_labels(), loc='upper center',
+                   bbox_to_anchor=(.52, .922), ncol=3, fontsize=8.3,
+                   frameon=False)
+
+    if op.get('mostrar_resumo_operacional', True):
+        fig.text(.105, .126,
+                 f'AP={ap:.5f}  |  Prevalência={prevalencia:.4%}  |  τ* MCC OOF={tau:.6g}',
+                 fontsize=9.3, weight='bold', color='#26374d', va='top')
+        fig.text(.105, .093,
+                 f'τ*: P={pt_mcc["precision"]:.4f}, R={pt_mcc["recall"]:.4f}   |   '
+                 f'0,50: P={pt_fixo["precision"]:.4f}, R={pt_fixo["recall"]:.4f}',
+                 fontsize=9.1, color='#26374d', va='top')
+        nota = ('Limiar 0,50 sem positivos previstos: P=0 apenas por convenção; '
+                'ponto omitido do desenho.' if not pt_fixo['precision_definida'] else
+                'Mesmas predições OOF; AP não é área trapezoidal; fraude = 1.')
+        fig.text(.105, .058, nota, fontsize=8.4,
+                 color='#a04442' if not pt_fixo['precision_definida'] else '#52647a',
+                 va='top')
+        if ampliado:
+            fig.text(.105, .031, 'Nota: o zoom pode cortar picos de Precision; a AP considera a curva completa.',
+                     fontsize=8.0, color='#52647a', va='top')
+
+    _salvar(fig, _caminho_png(destino, 'curva_pr', ext), dpi=dpi)
+    if dados:
+        _csv_protegido(pd.DataFrame({'recall':rec,'precision':prec}),
+                       destino/'01_curva_precision_recall.csv')
+        _csv_protegido(pd.DataFrame([
+            {'corte': nome, **pt, 'ap_oof': ap, 'prevalencia_oof':prevalencia,
+             'origem': 'OOF_F1_F9'} for nome, pt, _, _ in pontos
+        ]), destino/'01_curva_precision_recall_pontos.csv')
+
+
+def _pontos_operacionais_mcc(y, p, limiar_oof):
+    """MCC bruto do mesmo OOF em tau* congelado e no corte fixo 0,50.
+
+    Nao procura novo limiar. O valor de 0,50 deve aparecer mesmo que
+    nao exista nenhum score nesse valor ou nenhuma previsao positiva.
+    """
+    _exigir(np.isfinite(limiar_oof) and 0 <= limiar_oof <= 1,
+            'Limiar MCC OOF invalido.')
+    return [
+        {'corte':'MCC OOF', 'limiar':float(limiar_oof),
+         'mcc_bruto':float(matthews_corrcoef(y, p >= limiar_oof)),
+         'positivos_previstos':int(np.count_nonzero(p >= limiar_oof)),
+         'origem':'OOF_F1_F9'},
+        {'corte':'Fixo 0,50', 'limiar':0.5,
+         'mcc_bruto':float(matthews_corrcoef(y, p >= 0.5)),
+         'positivos_previstos':int(np.count_nonzero(p >= 0.5)),
+         'origem':'OOF_F1_F9'},
+    ]
+
+
+def _limites_zoom_mcc(config, limiar_oof, threshold, mcc=None):
+    """Enquadra a parte informativa da curva MCC sem selecionar novo limiar.
+
+    Usa a distribuicao *dos pontos da propria curva* e nao um multiplo de
+    tau*. Alguns valores extremos de score podem ficar fora da janela;
+    eles continuam no CSV completo. O limiar oficial e sempre exibido.
+    """
+    op = _op(config, 'curva_mcc')
+    modo = op.get('modo_eixos', 'zoom_automatico')
+    _exigir(modo in ('zoom_automatico', 'manual'),
+            'curva_mcc.modo_eixos deve ser zoom_automatico ou manual.')
+    if modo == 'manual':
+        limites = np.asarray(op.get('limites_limiar', [0, 1]), dtype=float)
+        _exigir(limites.shape == (2,) and np.isfinite(limites).all() and
+                0 <= limites[0] < limites[1] <= 1 and
+                limites[0] <= limiar_oof <= limites[1],
+                'curva_mcc.limites_limiar invalidos ou excluem tau*.')
+        return (float(limites[0]), float(limites[1])), False
+
+    threshold = np.asarray(threshold, dtype=float)
+    _exigir(threshold.ndim == 1 and threshold.size > 0 and
+            np.isfinite(threshold).all() and np.all((threshold >= 0) & (threshold <= 1)) and
+            np.isfinite(limiar_oof) and 0 <= limiar_oof <= 1,
+            'Limiares invalidos na curva MCC.')
+    fracao = float(op.get('zoom_fracao_mcc_relevante', 0.025))
+    extremo = float(op.get('zoom_quantile_extremo', 0.005))
+    folga = float(op.get('zoom_margem_horizontal', 0.07))
+    _exigir(0 <= fracao < 1 and 0 <= extremo < .5 and 0 < folga <= .5 and
+            np.isfinite([fracao, extremo, folga]).all(),
+            'Parametros do zoom horizontal MCC invalidos.')
+
+    candidatos = threshold
+    if mcc is not None:
+        valores = np.asarray(mcc, dtype=float)
+        _exigir(valores.shape == threshold.shape and np.isfinite(valores).all(),
+                'Curva MCC e limiares nao coincidem.')
+        amplitude = float(np.max(np.abs(valores)))
+        if amplitude > 1e-12:
+            significativos = np.abs(valores) >= fracao * amplitude
+            if np.any(significativos):
+                candidatos = threshold[significativos]
+
+    # Cortar so extremos visuais raros, nunca o tau* congelado.
+    if candidatos.size >= 20:
+        baixo, alto = np.quantile(candidatos, [extremo, 1-extremo])
+    else:
+        baixo, alto = float(np.min(candidatos)), float(np.max(candidatos))
+    baixo = min(float(baixo), float(limiar_oof))
+    alto = max(float(alto), float(limiar_oof))
+    largura = max(alto - baixo, alto*.04, 1e-12)
+    esquerdo = max(0., baixo - folga*largura)
+    direito = min(1., alto + folga*largura)
+    if esquerdo <= .18 * max(direito, 1e-12):
+        esquerdo = 0.
+    if direito <= esquerdo:
+        # Caso degenerado (scores todos iguais): janela pequena mas valida.
+        esquerdo = max(0., float(limiar_oof) - .025)
+        direito = min(1., float(limiar_oof) + .025)
+        if direito <= esquerdo:
+            esquerdo, direito = 0., 1.
+    return (float(esquerdo), float(direito)), bool(esquerdo > 0 or direito < 1)
 
 
 def _plot_mcc(config, y, p, vencedor, escolha, destino, ext, dpi, dados):
-    op = _op(config,'curva_mcc')
-    threshold, mcc = _mcc_curva_exata(y,p)
-    pontos = int(op.get('pontos_visualizacao',2000))
-    _exigir(pontos>0,'curva_mcc.pontos_visualizacao deve ser positivo.')
-    vis = np.unique(np.linspace(0,len(threshold)-1,min(pontos,len(threshold)),dtype=np.int64))
-    limiar = float(escolha['limiar_mcc_oof'])
-    fig,ax = _figura(config)
-    ax.plot(threshold[vis],mcc[vis],lw=1.2,label='MCC dos limiares OOF')
-    if op.get('mostrar_limiar_oof',True):
-        ax.axvline(limiar,ls='--',color='black',lw=1,label=f'Limiar OOF={limiar:.6g}')
-    if op.get('mostrar_mcc_no_limiar_oof',True):
-        ax.scatter([limiar],[float(vencedor['mcc'])],color='darkred',zorder=4,
-                   label=f'MCC no limiar = {float(vencedor["mcc"]):.5f}')
-    if op.get('mostrar_limiar_05',True):
-        ax.axvline(.5,ls=':',color='gray',lw=1,label='Referência 0,5')
-    ax.set(xlabel='Limiar de probabilidade',ylabel='MCC')
-    if config['visualizacao']['padrao'].get('titulo',True):
-        ax.set_title('02 — MCC por limiar | Vencedor OOF')
-    ax.grid(config['visualizacao']['padrao'].get('grade',True),alpha=.25)
-    if config['visualizacao']['padrao'].get('legenda',True): ax.legend()
-    _salvar(fig,_caminho_png(destino,'curva_mcc',ext),dpi=dpi)
+    """MCC bruto OOF com zoom de leitura e comparacao exata em tau* e 0,50."""
+    op = _op(config, 'curva_mcc')
+    threshold, mcc = _mcc_curva_exata(y, p)
+    pontos = int(op.get('pontos_visualizacao', 2000))
+    _exigir(pontos > 0, 'curva_mcc.pontos_visualizacao deve ser positivo.')
+    tau = float(escolha['limiar_mcc_oof'])
+    operacoes = _pontos_operacionais_mcc(y, p, tau)
+    otimo, fixo = operacoes
+    _numero_proximo(otimo['mcc_bruto'], vencedor['mcc'],
+                    'MCC do corte congelado no grafico 02', atol=1e-7)
+
+    xlim, ampliado = _limites_zoom_mcc(config, tau, threshold, mcc)
+    no_zoom = np.flatnonzero((threshold >= xlim[0]) & (threshold <= xlim[1]))
+    # Amostrar para o desenho SOMENTE dentro da janela. Manter todos os
+    # valores e limiares originais no CSV e nao usar a grade visual na selecao.
+    if len(no_zoom) > pontos:
+        pos = np.unique(np.linspace(0, len(no_zoom)-1, pontos, dtype=np.int64))
+        vis = no_zoom[pos]
+        # Preservar os extremos do MCC do intervalo ao subamostrar.
+        vis = np.unique(np.r_[vis, no_zoom[np.argmax(mcc[no_zoom])],
+                              no_zoom[np.argmin(mcc[no_zoom])]])
+    else:
+        vis = no_zoom
+    if not len(vis):
+        # Valores de tau* entre scores distintos (caso raro): nao fabricar
+        # pontos de curva, mas continuar mostrando tau* e sua metrica OOF.
+        vis = np.array([], dtype=np.int64)
+
+    # MCC e sempre bruto em [-1,+1], nunca a transformacao do Painel 00.
+    fig, ax = plt.subplots(figsize=(11.0, 7.3))
+    # Reservas exclusivas: cabecalho, legenda, malha, rotulos e rodape.
+    # Nao posicionar textos manuais sobre a area do xlabel.
+    fig.subplots_adjust(left=.105, right=.965, bottom=.265, top=.775)
+    ax.plot(threshold[vis], mcc[vis], lw=1.65, color='#385aaf',
+            label='MCC bruto por limiar (OOF)')
+    if op.get('mostrar_linha_mcc_zero', True):
+        ax.axhline(0, color='#9ba5b1', linestyle=':', linewidth=1, alpha=.8)
+    if op.get('mostrar_limiar_oof', True):
+        ax.axvline(tau, ls='--', color='#168e66', lw=1.25,
+                   label=f'Limiar ótimo: τ*={tau:.6g}')
+    if op.get('mostrar_mcc_no_limiar_oof', True):
+        ax.scatter([tau], [otimo['mcc_bruto']], s=78, marker='o',
+                   color='#168e66', edgecolors='white', linewidths=.9, zorder=6,
+                   label=f'MCC(τ*)={otimo["mcc_bruto"]:.5f}')
+
+    # Em bases desbalanceadas, 0,50 costuma ficar fora do zoom: manter a
+    # comparacao numerica no rodape, sem achatar a curva ou criar ponto falso.
+    fixo_visivel = xlim[0] <= .5 <= xlim[1]
+    if fixo_visivel and op.get('mostrar_limiar_05', True):
+        ax.axvline(.5, ls='--', color='#ce584b', lw=1.25,
+                   label='Referência fixa: τ=0,50')
+        if op.get('mostrar_mcc_no_limiar_05', True):
+            ax.scatter([.5], [fixo['mcc_bruto']], s=70, marker='X',
+                       color='#ce584b', zorder=7,
+                       label=f'MCC(0,50)={fixo["mcc_bruto"]:.5f}')
+
+    ax.set(xlabel='Limiar de classificação (τ)', ylabel='MCC bruto (−1 a +1)',
+           xlim=xlim)
+    # Usar somente a faixa visivel na escala Y para evitar compressao.
+    valores_y = [0.0, otimo['mcc_bruto']]
+    if len(no_zoom):
+        valores_y.extend((float(np.min(mcc[no_zoom])), float(np.max(mcc[no_zoom]))))
+    if fixo_visivel:
+        valores_y.append(fixo['mcc_bruto'])
+    minimo, maximo = min(valores_y), max(valores_y)
+    margem = max(.005, (maximo-minimo)*.12)
+    ax.set_ylim(max(-1., minimo-margem), min(1., maximo+margem))
+    if config['visualizacao']['padrao'].get('titulo', True):
+        fig.suptitle('02 — MCC por limiar | vencedor OOF', fontsize=15, y=.972)
+    if ampliado:
+        fig.text(.105, .913,
+                 f'Zoom automatico: τ de {xlim[0]:.5g} a {xlim[1]:.5g}  |  '
+                 'dados completos preservados em CSV',
+                 fontsize=9.5, color='#52647a', va='top')
+    if config['visualizacao']['padrao'].get('grade', True):
+        ax.grid(alpha=.22)
+    if config['visualizacao']['padrao'].get('legenda', True):
+        fig.legend(*ax.get_legend_handles_labels(), loc='upper center',
+                   bbox_to_anchor=(.535, .864), ncol=3, fontsize=9.0,
+                   frameon=False, columnspacing=1.8, handlelength=2.1)
+
+    if op.get('mostrar_resumo_operacional', True):
+        # Tres linhas curtas com distancia real do xlabel, nao na malha.
+        fig.text(.105, .137,
+            f'MCC otimo OOF: τ*={tau:.6g}  |  MCC(τ*)={otimo["mcc_bruto"]:.5f}',
+            fontsize=10.2, weight='bold', color='#273c56', va='top')
+        fig.text(.105, .097,
+            f'Referencia fixa: τ=0,50  |  MCC(0,50)={fixo["mcc_bruto"]:.5f}'
+            + (' (fora do zoom)' if not fixo_visivel else ''),
+            fontsize=9.4, color='#273c56', va='top')
+        fig.text(.105, .054,
+            'Zoom apenas visual · MCC bruto (−1 a +1) · OOF F1–F9 · F10 não utilizado',
+            fontsize=8.8, color='#52647a', va='top')
+    _salvar(fig, _caminho_png(destino, 'curva_mcc', ext), dpi=dpi)
     if dados:
-        _csv_protegido(pd.DataFrame({'limiar':threshold,'mcc':mcc}),destino/'02_mcc_por_limiar_completo.csv')
+        _csv_protegido(pd.DataFrame({'limiar':threshold, 'mcc':mcc}),
+                       destino/'02_mcc_por_limiar_completo.csv')
+        _csv_protegido(pd.DataFrame(operacoes),
+                       destino/'02_mcc_pontos_operacionais.csv')
+
+
+# Faixas visuais exatamente como no catalogo de referencia do usuario.
+# Sao referencias CONTEXTUAIS, nao limites universais de desempenho.
+_FAIXAS_PDF = {
+    'TN': (85., 97.), # <85 ruim | 85..97 medio | >=97 bom
+    'FP': (1., 5.),   # <=1 bom | 1..5 medio | >5 ruim
+    'FN': (10., 30.), # <=10 bom | 10..30 medio | >30 ruim
+    'TP': (40., 70.), # <40 ruim | 40..70 medio | >=70 bom
+}
+
+_DESCRICOES_PDF = {
+    'TN': ('VN', 'Verdadeiro negativo',
+           'Legítimas corretamente classificadas como legítimas.',
+           ('Muitas legítimas tratadas como suspeitas',
+            'Custo operacional ainda relevante',
+            'Maioria das legítimas liberada corretamente')),
+    'FP': ('FP', 'Falso positivo',
+           'Legítimas classificadas incorretamente como fraude.',
+           ('Baixo atrito para clientes legítimos',
+            'Tolerância depende da operação',
+            'Muitas legítimas bloqueadas por engano')),
+    'FN': ('FN', 'Falso negativo',
+           'Fraudes reais que passaram sem serem identificadas.',
+           ('Poucas fraudes escapam',
+            'Detecção intermediária',
+            'Muitas fraudes não identificadas')),
+    'TP': ('VP', 'Verdadeiro positivo',
+           'Fraudes reais corretamente detectadas.',
+           ('Poucas fraudes identificadas',
+            'Detecção com espaço para melhora',
+            'Boa parcela das fraudes identificada')),
+}
+
+
+def _dados_quadrantes(y, p, limiar, config):
+    """Números exatos do OOF; percentuais condicionados à CLASSE REAL.
+
+    TN+FP = número de legítimas, FN+TP = número de fraudes.
+    Não classifica qualidade quando alguma classe real está ausente.
+    """
+    _exigir(np.isfinite(limiar) and 0 <= limiar <= 1,
+            'Limiar da matriz deve estar em [0,1].')
+    cm = confusion_matrix(y, p >= limiar, labels=[0, 1])
+    tn, fp, fn, tp = map(int, cm.ravel())
+    n0, n1 = tn + fp, fn + tp
+    op = config.get('visualizacao', {}).get('estilo_matrizes', {})
+    limites_cfg = op.get('faixas_qualidade', {})
+    valores = {'TN':(tn,n0,n0), 'FP':(fp,n0,0),
+               'FN':(fn,n1,0), 'TP':(tp,n1,n1)}
+    linhas=[]
+    for chave, (observado, denominador, ideal) in valores.items():
+        lims = np.asarray(limites_cfg.get(chave.lower(), _FAIXAS_PDF[chave]), dtype=float)
+        _exigir(lims.shape == (2,) and np.isfinite(lims).all()
+                and 0 <= lims[0] < lims[1] <= 100,
+                f'Faixas de qualidade invalidas para {chave}.')
+        pct = (100.*observado/denominador) if denominador else None
+        proximidade = (100.*(1-abs(observado-ideal)/denominador)) if denominador else None
+        if pct is None:
+            faixa = 'N/A'
+        elif chave in ('TN','TP'):
+            faixa = 'Ruim' if pct < lims[0] else 'Médio' if pct < lims[1] else 'Bom'
+        else:
+            faixa = 'Bom' if pct <= lims[0] else 'Médio' if pct <= lims[1] else 'Ruim'
+        linhas.append({
+            'quadrante': chave, 'real':0 if chave in ('TN','FP') else 1,
+            'predito':0 if chave in ('TN','FN') else 1,
+            'observado': observado, 'ideal': ideal,
+            'delta_ideal': abs(observado-ideal),
+            'denominador_classe_real': denominador,
+            'pct_da_classe_real': pct,
+            'proximidade_pct': proximidade,
+            'faixa_qualitativa': faixa,
+            'faixa_limite_1_pct':float(lims[0]),
+            'faixa_limite_2_pct':float(lims[1]),
+        })
+    return cm, linhas
+
+
+def _qualidade_cor(lims, invertido):
+    """Gradiente local: as transições seguem os cortes do PDF, não 1/3 fixo."""
+    verde, amarelo, vermelho='#25b576','#ecc84d','#de3d55'
+    a,b=float(lims[0])/100,float(lims[1])/100
+    # Sem pontos repetidos em 0/1 (as faixas atuais estão no interior).
+    _exigir(0<a<b<1, 'Faixas de qualidade devem estar dentro de 0..100 para gradiente.')
+    if invertido:
+        pontos=[(0,verde),(a,verde),((a+b)/2,amarelo),(b,vermelho),(1,vermelho)]
+    else:
+        pontos=[(0,vermelho),(a,vermelho),((a+b)/2,amarelo),(b,verde),(1,verde)]
+    return LinearSegmentedColormap.from_list('qualidade_'+('invertida' if invertido else 'crescente'),pontos)
 
 
 def _matriz(config, y, p, limiar, nome, destino, ext, dpi, dados):
-    cm = confusion_matrix(y, p>=limiar, labels=[0,1]); tn,fp,fn,tp = cm.ravel()
+    """Painel detalhado por quadrante fiel ao PDF; um painel para cada corte.
+
+    Arquivos 03=0,50 e 04=τ* OOF, nomes preservados. Nenhum limiar e
+    selecionado ou otimizado aqui: sao utilizados os valores recebidos.
+    """
+    cm, linhas = _dados_quadrantes(y,p,limiar,config)
+    tn, fp, fn, tp = map(int, cm.ravel())
+    n0, n1 = tn+fp, fn+tp
     op = config['visualizacao'].get('estilo_matrizes',{})
-    vis = op.get('mostrar',{})
-    linhas = np.sum(cm,axis=1)
-    ideal = np.array([[linhas[0],0],[0,linhas[1]]],dtype=np.int64)
-    proximidade = np.array([[tn/linhas[0],1-fp/linhas[0]],
-                            [1-fn/linhas[1],tp/linhas[1]]],dtype=np.float64)*100
-    proxima = op.get('escala_proximidade', {})
-    cmap = matplotlib.colors.LinearSegmentedColormap.from_list('proximidade',
-        [proxima.get('cor_longe','#f7fbff'),proxima.get('cor_meio','#6baed6'),proxima.get('cor_perto','#08306b')])
-    fig,ax = _figura(config,escala=1.12)
-    ax.imshow(proximidade,cmap=cmap,vmin=0,vmax=100)
-    quadrantes = [['TN','FP'],['FN','TP']]
-    descricoes = [['Legítima correta','Alarme falso'],['Fraude não detectada','Fraude detectada']]
-    cores = op.get('bordas',{})
-    for i in range(2):
-        for j in range(2):
-            linha_n=linhas[i]
-            pct_classe=cm[i,j]/linha_n*100 if linha_n else float('nan')
-            linhas_txt = []
-            if vis.get('rotulo_tn_fp_fn_tp',True): linhas_txt.append(quadrantes[i][j])
-            if vis.get('descricao_quadrante',True): linhas_txt.append(descricoes[i][j])
-            if vis.get('contagem_observada',True): linhas_txt.append(f'Observado: {cm[i,j]:,}')
-            if vis.get('contagem_ideal',True): linhas_txt.append(f'Ideal: {ideal[i,j]:,}')
-            if vis.get('diferenca_absoluta_do_ideal',True): linhas_txt.append(f'Δ ideal: {abs(cm[i,j]-ideal[i,j]):,}')
-            if vis.get('percentual_da_classe',True): linhas_txt.append(f'{pct_classe:.2f}% da classe real')
-            if vis.get('percentual_proximidade',True): linhas_txt.append(f'Proximidade: {proximidade[i,j]:.2f}%')
-            ax.text(j,i,'\n'.join(linhas_txt),ha='center',va='center',fontsize=8.3,
-                    color=('white' if proximidade[i,j] >= 65 else 'black')
-                       if proxima.get('adaptar_cor_texto',True) else 'black')
-            ax.add_patch(Rectangle((j-.5,i-.5),1,1,fill=False,
-                                   edgecolor=cores.get(quadrantes[i][j].lower(),'#555555'),linewidth=3.0))
-    titulo=f'{ARQUIVOS[nome][:2]} — Matriz de confusão | OOF | Limiar={limiar:.6g}'
-    ax.set(xticks=[0,1], yticks=[0,1], xticklabels=['Legítima','Fraude'],
-           yticklabels=['Legítima','Fraude'],xlabel='Classe predita',ylabel='Classe real')
-    if config['visualizacao']['padrao'].get('titulo',True):ax.set_title(titulo)
-    if vis.get('totais_linhas_colunas',False):
-        ax.text(1.04,.76,f'Total legítimas: {linhas[0]:,}',transform=ax.transAxes,fontsize=8)
-        ax.text(1.04,.20,f'Total fraudes: {linhas[1]:,}',transform=ax.transAxes,fontsize=8)
-        ax.text(.5,-.15,f'Total predito legítima: {tn+fn:,} | fraude: {tp+fp:,}',
-                transform=ax.transAxes,ha='center',fontsize=8)
-    # Métricas do rodapé calculadas no limiar representado, sem otimizá-lo.
-    foot=op.get('rodape',{})
-    pred=(p>=limiar)
+    _exigir(op.get('layout', 'quadrantes_pdf') == 'quadrantes_pdf',
+            'Layout da matriz desconhecido. Use quadrantes_pdf.')
+    mostra = op.get('mostrar',{})
+    pal = op.get('cores_painel',{})
+    bg=pal.get('fundo','#091425')
+    cartao=pal.get('cartao','#12213b')
+    borda=pal.get('borda','#294766')
+    texto=pal.get('texto','#f6f8fc')
+    secundario=pal.get('secundario','#b2bfd3')
+
+    fig=plt.figure(figsize=(11.6,14.3),facecolor=bg)
+    def figura_caixa(x,y,w,h,cor,raio=.012,contorno=borda):
+        fig.add_artist(FancyBboxPatch((x,y),w,h,
+              boxstyle=f'round,pad=0.006,rounding_size={raio}',
+              transform=fig.transFigure,facecolor=cor,edgecolor=contorno,
+              linewidth=.9,zorder=0))
+    def t(x,y,s,**kwargs):
+        fig.text(x,y,s,transform=fig.transFigure,color=kwargs.pop('color',texto),
+                 va=kwargs.pop('va','top'),**kwargs)
+    def pct_texto(pct):
+        return 'N/A' if pct is None else f'{pct:.2f}%'.replace('.',',')
+    def inteiro(n):return f'{int(n):,}'.replace(',','.')
+
+    is_mcc = nome=='matriz_confusao_mcc'
+    corte='LIMIAR ÓTIMO MCC OOF' if is_mcc else 'CORTE FIXO 0,50'
+    numero='04' if is_mcc else '03'
+    mcc=float(matthews_corrcoef(y,p>=limiar))
+    t(.065,.973,f'{numero} — Matriz de confusão detalhada por quadrante',
+      fontsize=20.5,weight='bold')
+    t(.065,.936,'Validação OOF · Classe positiva = fraude (1) · Normalização pela classe real',
+      fontsize=11.0,color=secundario)
+    t(.065,.898,corte,fontsize=12.8,weight='bold',color='#a9c8eb')
+    rotulo_tau=f'{limiar:.6g}'.replace('.', ',')
+    rotulo_mcc=f'{mcc:.5f}'.replace('.', ',')
+    t(.934,.898,f'τ={rotulo_tau}  ·  MCC={rotulo_mcc}',
+      fontsize=11.7,weight='bold',ha='right')
+
+    # Percentuais complementares dentro de cada classe real.
+    resumo=[('CLASSE REAL: LEGÍTIMA','VN e FP somam 100%',n0,'TN','FP'),
+            ('CLASSE REAL: FRAUDE','FN e VP somam 100%',n1,'FN','TP')]
+    por_chave={r['quadrante']:r for r in linhas}
+    for idx,(cab,nota,total,c1,c2) in enumerate(resumo):
+        x=.065+idx*.44
+        figura_caixa(x,.817,.420,.059,cartao,raio=.007)
+        t(x+.016,.864,cab,fontsize=10.3,weight='bold')
+        t(x+.016,.844, f'{pct_texto(por_chave[c1]["pct_da_classe_real"])} / '
+                      f'{pct_texto(por_chave[c2]["pct_da_classe_real"])}  '
+                      f'  |  N={inteiro(total)}',fontsize=11.4,weight='bold')
+        t(x+.016,.827,nota,fontsize=8.7,color=secundario)
+
+    # Quatro cartoes, mantendo a ordem TN, FP, FN, TP do PDF.
+    topo=.795; altura=.154; intervalo=.012
+    nomes_ordem=['TN','FP','FN','TP']
+    for indice,chave in enumerate(nomes_ordem):
+        linha=por_chave[chave]
+        y0=topo-altura-indice*(altura+intervalo)
+        figura_caixa(.065,y0,.868,altura,cartao,raio=.011)
+        codigo,titulo,descricao,notas=_DESCRICOES_PDF[chave]
+        pct=linha['pct_da_classe_real']
+        limites=(linha['faixa_limite_1_pct'],linha['faixa_limite_2_pct'])
+        invertido = chave in ('FP','FN')
+        t(.089,y0+altura-.015,f'{codigo}  {titulo}',fontsize=14.2,weight='bold')
+        t(.907,y0+altura-.012,pct_texto(pct),fontsize=20.2,weight='bold',ha='right')
+        t(.089,y0+altura-.045,descricao,fontsize=10.1,color=secundario)
+        nums=[]
+        if mostra.get('contagem_observada',True):nums.append('Observado: '+inteiro(linha['observado']))
+        if mostra.get('contagem_ideal',True):nums.append('Ideal: '+inteiro(linha['ideal']))
+        if mostra.get('diferenca_absoluta_do_ideal',True):nums.append('Δ ideal: '+inteiro(linha['delta_ideal']))
+        if mostra.get('percentual_proximidade',True) and linha['proximidade_pct'] is not None:
+            nums.append('Proximidade: '+pct_texto(linha['proximidade_pct']))
+        if nums:t(.089,y0+altura-.065,'    |    '.join(nums),fontsize=8.5,color=secundario)
+        ax_bar=fig.add_axes((.09,y0+.056,.816,.013))
+        grad=np.linspace(0,1,900).reshape(1,-1)
+        ax_bar.imshow(grad,aspect='auto',cmap=_qualidade_cor(limites,invertido),
+                      vmin=0,vmax=1,extent=(0,100,0,1))
+        if pct is not None:
+            ax_bar.axvline(pct,color='white',lw=2.2,solid_capstyle='round')
+        ax_bar.set_xlim(0,100);ax_bar.set_ylim(0,1);ax_bar.axis('off')
+        # A barra representa percentual REAL (nao posicao normalizada da faixa).
+        labels= ([('Bom',f'0–{limites[0]:g}%'),('Médio',f'{limites[0]:g}–{limites[1]:g}%'),
+                  ('Ruim',f'>{limites[1]:g}%')] if invertido else
+                 [('Ruim',f'0–{limites[0]:g}%'),('Médio',f'{limites[0]:g}–{limites[1]:g}%'),
+                  ('Bom',f'{limites[1]:g}–100%')])
+        xs=(.09,.467,.908)
+        for j,(rot,faixa) in enumerate(labels):
+            t(xs[j],y0+.044,f'{rot}: {faixa}',fontsize=9.2,color=secundario,
+              ha='right' if j==2 else 'center' if j==1 else 'left')
+        texto_notas='    •    '.join(notas)
+        t(.089,y0+.022,texto_notas,fontsize=8.1,color=secundario)
+
+    # Rodape separado: mesma amostra e mesmo score, so o corte muda.
+    pred=p>=limiar
     pr=precision_score(y,pred,zero_division=0)
-    re=recall_score(y,pred,zero_division=0)
+    rc=recall_score(y,pred,zero_division=0)
     f1=f1_score(y,pred,zero_division=0)
-    spec=tn/(tn+fp) if tn+fp else float('nan')
-    mcc=matthews_corrcoef(y,pred)
-    total=len(y)
-    kpi = {
-        'accuracy':f'Accuracy={(tn+tp)/total:.3f}',
-        'precision':f'Precisão={pr:.3f}',
-        'recall_sensibilidade':f'Recall={re:.3f}',
-        'especificidade':f'Especificidade={spec:.3f}',
-        'f1':f'F1={f1:.3f}',
-        'fpr':f'FPR={fp/(fp+tn) if fp+tn else float("nan"):.3f}',
-        'fnr':f'FNR={fn/(fn+tp) if fn+tp else float("nan"):.3f}',
-        'mcc':f'MCC={mcc:.4f}',
-        'prevalencia':f'Prevalência={y.mean():.3%}',
-    }
-    texto=' | '.join(valor for chave,valor in kpi.items() if foot.get(chave,False))
-    if texto:
-        # Quebrar em 2 ou 3 linhas para imagens legíveis.
-        selecionados=[valor for chave,valor in kpi.items() if foot.get(chave,False)]
-        grupos=[selecionados[i:i+3] for i in range(0,len(selecionados),3)]
-        fig.text(.5,-.02,'\n'.join(' | '.join(g) for g in grupos),ha='center',va='top',fontsize=9)
+    especificidade=tn/n0 if n0 else float('nan')
+    indicadores={'accuracy':f'Accuracy={(tn+tp)/len(y):.4f}',
+          'precision':f'Precisão={pr:.4f}',
+          'recall_sensibilidade':f'Recall={rc:.4f}',
+          'especificidade':f'Especificidade={especificidade:.4f}',
+          'f1':f'F1={f1:.4f}',
+          'fpr':f'FPR={fp/n0:.4f}' if n0 else 'FPR=N/A',
+          'fnr':f'FNR={fn/n1:.4f}' if n1 else 'FNR=N/A',
+          'mcc':f'MCC={mcc:.5f}',
+          'prevalencia':f'Prevalência={np.mean(y):.4%}'}
+    selecionados=[v for k,v in indicadores.items() if op.get('rodape',{}).get(k,False)]
+    if selecionados:
+        t(.065,.117,'  ·  '.join(selecionados[:4]),fontsize=10.0,weight='bold')
+        if len(selecionados)>4:
+            t(.065,.091,'  ·  '.join(selecionados[4:]),fontsize=9.6,color=secundario)
+    t(.065,.055,'Faixas bom/médio/ruim: referências ilustrativas e contextuais do catálogo; não são padrões universais.',
+      fontsize=9.0,color='#edd091')
+    t(.065,.031,'Mesmos dados e scores OOF F1–F9 · F10 não utilizado · Nenhum novo limiar selecionado.',
+      fontsize=9.1,color=secundario)
+
     _salvar(fig,_caminho_png(destino,nome,ext),dpi=dpi)
     if dados:
-        registros=[]
-        for i in range(2):
-            for j in range(2):
-                registros.append({'quadrante':quadrantes[i][j], 'real':i, 'predito':j,
-                     'observado':int(cm[i,j]),'ideal':int(ideal[i,j]),
-                     'proximidade_pct':float(proximidade[i,j]),
-                     'pct_da_classe_real':float(cm[i,j]/linhas[i]*100)})
-        _csv_protegido(pd.DataFrame(registros),destino/(ARQUIVOS[nome]+'.csv'))
+        _csv_protegido(pd.DataFrame(linhas),destino/(ARQUIVOS[nome]+'.csv'))
+
+
+def _limites_x_distribuicao(op, y, p, tau):
+    """Janela de leitura baseada nos scores OOF de AMBAS as classes.
+
+    Usar quantis por classe evita que a predominância de negativas
+    oculte as caudas das fraudes. Não recalcula nem altera scores.
+    """
+    modo = op.get('modo_eixo_x', 'zoom_automatico')
+    _exigir(modo in ('zoom_automatico', 'completo'),
+            'distribuicao_probabilidades.modo_eixo_x invalido.')
+    _exigir(0 <= tau <= 1 and np.isfinite(tau), 'Limiar OOF invalido.')
+    if modo == 'completo':
+        return (0., 1.), False
+    q = float(op.get('quantil_zoom', .995))
+    margem = float(op.get('margem_zoom', .10))
+    _exigir(.5 <= q <= 1. and 0. <= margem <= .5,
+            'Parametros do zoom de distribuicao invalidos.')
+    candidatos = [float(np.quantile(p[y == classe], q))
+                  for classe in (0, 1) if np.any(y == classe)]
+    maximo = max([float(tau), *candidatos, float(np.min(p)), 1e-10])
+    teto = min(1., maximo * (1. + margem))
+    # Um minimo numerico garante ao menos dois limites diferentes.
+    if teto <= 1e-10:
+        teto = min(1., max(1e-6, float(np.max(p))*1.1))
+    return (0., teto), teto < (1. - 1e-10)
+
+
+def _dados_distribuicao(y, p, limites, bins):
+    """Contagens reais e frequências normalizadas por classe real.
+
+    As frequências dos bins são divididas por todas as observações
+    daquela classe, mesmo quando o eixo usa zoom e oculta a cauda.
+    """
+    _exigir(bins > 0, 'Numero de bins deve ser positivo.')
+    edges=np.linspace(limites[0],limites[1],bins+1)
+    counts0=np.histogram(p[y==0],bins=edges)[0]
+    counts1=np.histogram(p[y==1],bins=edges)[0]
+    n0=int(np.sum(y==0)); n1=int(np.sum(y==1))
+    fora0=n0-int(np.sum(counts0));fora1=n1-int(np.sum(counts1))
+    df=pd.DataFrame({
+        'inicio_bin':edges[:-1], 'fim_bin':edges[1:],
+        'contagem_legitima':counts0, 'contagem_fraude':counts1,
+        'frequencia_relativa_legitima':counts0/n0 if n0 else np.zeros(bins),
+        'frequencia_relativa_fraude':counts1/n1 if n1 else np.zeros(bins),
+        'total_legitima':n0,'total_fraude':n1,
+        'fora_do_zoom_legitima':fora0,'fora_do_zoom_fraude':fora1,
+    })
+    return df, edges
 
 
 def _distribuicao(config,y,p,escolha,destino,ext,dpi,dados):
-    op = _op(config,'distribuicao_probabilidades')
-    bins = int(op.get('bins',50))
-    _exigir(bins>0,'distribuicao_probabilidades.bins deve ser positivo.')
-    fig,ax=_figura(config)
-    separar = op.get('separar_classes',True)
-    dens = op.get('normalizar',True)
-    # Histograma e densidade usam escala de probabilidade real, sem fabricar dados.
+    op=_op(config, 'distribuicao_probabilidades')
+    bins=int(op.get('bins',50))
+    _exigir(5<=bins<=2000,'distribuicao_probabilidades.bins fora da faixa 5..2000.')
+    separar=op.get('separar_classes',True)
+    normalizar=op.get('normalizar',True)
     tipo=op.get('tipo','histograma')
     _exigir(tipo in ('histograma','densidade'), 'distribuicao_probabilidades.tipo invalido.')
-    bins_ = np.linspace(float(p.min()),float(p.max()) if p.max()>p.min() else float(p.min())+1e-9,bins+1)
-    conjuntos=[(p[y==0],'Legítimas','#1f77b4'),(p[y==1],'Fraudes','#d62728')] if separar else [(p,'Todas as transações','#1f77b4')]
-    for vals,titulo,cor in conjuntos:
-        if tipo == 'histograma':
-            ax.hist(vals,bins=bins_,density=dens,histtype='step',lw=1.6,label=titulo,color=cor)
+    escala=str(op.get('escala_y','linear'))
+    _exigir(escala in ('linear','log'),'escala_y deve ser linear ou log.')
+    tau=float(escolha['limiar_mcc_oof'])
+    limites, zoom=_limites_x_distribuicao(op,y,p,tau)
+    tab, edges=_dados_distribuicao(y,p,limites,bins)
+    n0=int(np.sum(y==0)); n1=int(np.sum(y==1))
+
+    # Um unico grafico principal, sem miniatura sobreposta.
+    fig=plt.figure(figsize=(12.0,7.4),facecolor='white')
+    ax=fig.add_axes([.085,.24,.875,.575])
+    fig.suptitle('05 — Distribuição das probabilidades de fraude | vencedor OOF',
+                 x=.5,y=.967,fontsize=15.5,weight='semibold')
+    subt=('Zoom automático por classe' if zoom else 'Escala completa de probabilidades')
+    fig.text(.085,.920,f'{subt}  ·  Frequências relativas dentro de cada classe',
+             fontsize=10.4,color='#53647c')
+
+    # Estilos do exemplo do catalogo: legitima azul, fraude laranja.
+    # Na sobreposicao, nenhuma classe e removida ou reponderada.
+    conjuntos=([(p[y==0],'Legítima','#5b9bd5',n0),
+                (p[y==1],'Fraude','#f29a43',n1)] if separar
+               else [(p,'Todas as transações','#5b9bd5',len(p))])
+    handles=[]; labels=[]
+    for vals, nome, cor, n in conjuntos:
+        if tipo=='histograma':
+            pesos=(np.full(len(vals),1./n,dtype=float) if normalizar
+                    else np.ones(len(vals),dtype=float))
+            _,_,art=ax.hist(vals,bins=edges,weights=pesos,alpha=.55,
+                  color=cor,edgecolor='white',linewidth=.4,label=f'{nome} (n={n:,})')
+            handles.append(art[0]);labels.append(f'{nome} (n={n:,})')
         else:
             _exigir(len(vals)>2 and np.std(vals)>0,
-                    f'KDE requer variacao e mais de duas observacoes: {titulo}')
-            xs=np.linspace(float(min(vals.min(),p.min())),float(max(vals.max(),p.max())),400)
-            kde=gaussian_kde(vals)
-            ys=kde(xs)
-            if not dens:ys=ys*len(vals)*(bins_[1]-bins_[0])
-            ax.plot(xs,ys,label=titulo,color=cor,lw=1.6)
-    if op.get('marcar_limiar_oof',True):
-        ax.axvline(float(escolha['limiar_mcc_oof']),ls='--',color='black',lw=1,
-                   label=f'Limiar MCC OOF={float(escolha["limiar_mcc_oof"]):.5f}')
-    if op.get('marcar_limiar_05',True):
-        ax.axvline(.5,ls=':',color='gray',lw=1,label='Limiar 0,5')
-    escala=op.get('escala_y','linear')
-    _exigir(escala in ('linear','log'),'escala_y deve ser linear ou log.')
+                    f'KDE requer variacao e mais de duas observacoes: {nome}')
+            xs=np.linspace(*limites,500)
+            dens=gaussian_kde(vals)(xs)
+            if normalizar:
+                # Densidade KDE e diferente de frequencia relativa por bin.
+                # Multiplicacao por largura do bin faz a escala comparavel
+                # a frequencia por bin (aproximadamente, nao soma 1 no zoom).
+                dens=dens*(edges[1]-edges[0])
+            else:
+                dens=dens*n*(edges[1]-edges[0])
+            linha,=ax.plot(xs,dens,color=cor,lw=2,label=f'{nome} (n={n:,})')
+            handles.append(linha);labels.append(f'{nome} (n={n:,})')
+
+    if op.get('marcar_limiar_oof',True) and limites[0]<=tau<=limites[1]:
+        l=ax.axvline(tau,color='#cb2935',lw=2,ls='-',label=f'τ* MCC OOF = {tau:.6g}')
+        handles.append(l);labels.append(f'τ* MCC OOF = {tau:.6g}')
+    if op.get('marcar_limiar_05',True) and limites[0]<=.5<=limites[1]:
+        l=ax.axvline(.5,color='#242e41',lw=1.6,ls='--',label='Corte fixo = 0,50')
+        handles.append(l);labels.append('Corte fixo = 0,50')
+    ax.set_xlim(*limites)
     ax.set_yscale(escala)
-    ax.set(xlabel='Probabilidade estimada de fraude',ylabel='Densidade' if dens else 'Contagem aproximada por bin')
-    if config['visualizacao']['padrao'].get('titulo',True):
-        ax.set_title('05 — Distribuição dos scores | Vencedor OOF')
-    ax.grid(config['visualizacao']['padrao'].get('grade',True),alpha=.2)
-    if config['visualizacao']['padrao'].get('legenda',True): ax.legend()
+    ax.set_xlabel('Score / probabilidade estimada de fraude',fontsize=11,labelpad=8)
+    ylabel=('Frequência relativa dentro de cada classe' if normalizar
+            else 'Número de transações por bin')
+    if tipo=='densidade':
+        ylabel=('Frequência relativa aproximada por bin (KDE)' if normalizar
+                else 'Contagem aproximada por bin (KDE)')
+    ax.set_ylabel(ylabel,fontsize=10.8,labelpad=9)
+    ax.grid(config['visualizacao']['padrao'].get('grade',True),alpha=.17,axis='y')
+    ax.set_axisbelow(True)
+    if config['visualizacao']['padrao'].get('legenda',True):
+        fig.legend(handles,labels,loc='upper center',bbox_to_anchor=(.5,.892),
+                   ncol=min(4,len(labels)),frameon=False,fontsize=9.4)
+
+    frac0=int(tab['fora_do_zoom_legitima'].iloc[0])/n0 if n0 else 0.
+    frac1=int(tab['fora_do_zoom_fraude'].iloc[0])/n1 if n1 else 0.
+    fig.text(.085,.152,f'AP OOF = {average_precision_score(y,p):.5f}   |   '
+             f'Prevalência = {np.mean(y):.4%}   |   τ* MCC OOF = {tau:.6g}',
+             fontsize=10.6,color='#263b59',weight='semibold')
+    cortes=f'Corte fixo 0,50: '+('linha tracejada na figura' if .5<=limites[1] else 'fora da janela ampliada')
+    fig.text(.085,.110,cortes,fontsize=9.7,color='#4c5d72')
+    if zoom:
+        fig.text(.085,.073,f'Cauda fora do zoom: legítimas {frac0:.2%}  ·  fraudes {frac1:.2%}. '
+                 'Denominadores incluem toda a classe.',fontsize=9.2,color='#596779')
+    else:
+        fig.text(.085,.073,'Barras por classe, mesma amostra OOF F1–F9. F10 não utilizado.',
+                 fontsize=9.2,color='#596779')
+
     _salvar(fig,_caminho_png(destino,'distribuicao_probabilidades',ext),dpi=dpi)
     if dados:
-        df=pd.DataFrame({'inicio_bin':bins_[:-1], 'fim_bin':bins_[1:],
-           'contagem_legitima':np.histogram(p[y==0],bins=bins_)[0],
-           'contagem_fraude':np.histogram(p[y==1],bins=bins_)[0]})
-        _csv_protegido(df,destino/'05_distribuicao_probabilidades.csv')
+        _csv_protegido(tab,destino/'05_distribuicao_probabilidades.csv')
 
 
 def _rotulo_config(linha):
@@ -402,7 +1060,7 @@ def _comparacao(config,grade,escolha,destino,ext,dpi,dados):
 
 
 def gerar_graficos_oof(experimento: Path):
-    """Gera os seis tipos configurados e retorna resumo (sem tocar no F10)."""
+    """Gera os graficos preditivos e o Painel 00 configurados e retorna resumo (sem tocar no F10)."""
     experimento=Path(experimento).resolve()
     config, grade, escolha, y, p = _ler_resultados(experimento)
     pad=config['visualizacao']['padrao']
@@ -416,7 +1074,8 @@ def gerar_graficos_oof(experimento: Path):
     vencedor=grade.iloc[0]
     gerados=[];omitidos=[]
     funcoes={
-        'curva_pr':lambda:_plot_pr(config,y,p,vencedor,destino,ext,dpi,dados),
+        'painel_score_composto':lambda:_plot_painel_00(config,y,p,vencedor,escolha,destino,ext,dpi,dados),
+        'curva_pr':lambda:_plot_pr(config,y,p,vencedor,escolha,destino,ext,dpi,dados),
         'curva_mcc':lambda:_plot_mcc(config,y,p,vencedor,escolha,destino,ext,dpi,dados),
         'matriz_confusao_05':lambda:_matriz(config,y,p,.5,'matriz_confusao_05',destino,ext,dpi,dados),
         'matriz_confusao_mcc':lambda:_matriz(config,y,p,float(escolha['limiar_mcc_oof']), 'matriz_confusao_mcc',destino,ext,dpi,dados),
@@ -436,6 +1095,16 @@ def gerar_graficos_oof(experimento: Path):
             'tipos_gerados':gerados,'tipos_omitidos_por_yaml':omitidos,
             'tipos_geometricos_pendentes_passo_07_02':list(config['visualizacao']['graficos'])[6:],
             'diretorio':str(destino)}
+    if 'painel_score_composto' in gerados:
+        painel_meta = {'tipo':'painel_00_composto', 'origem':'OOF_F1_F9',
+                       'id_vencedor':escolha['id_candidato'], 'f10_utilizado':False,
+                       'indicadores':_numeros_painel_00(y,p,vencedor,escolha)}
+        painel_path = destino/'manifesto_painel_00.json'
+        conteudo = json.dumps(painel_meta,ensure_ascii=False,indent=2)+'\n'
+        if not painel_path.exists():
+            painel_path.write_text(conteudo,encoding='utf-8')
+        elif painel_path.read_text(encoding='utf-8') != conteudo:
+            warnings.warn('Manifesto Painel 00 anterior divergente: preservado.',stacklevel=2)
     arq=destino/'manifesto_graficos_oof_07_01.json'
     content=json.dumps(resumo,ensure_ascii=False,indent=2)+'\n'
     if arq.exists() and arq.read_text(encoding='utf-8')!=content:

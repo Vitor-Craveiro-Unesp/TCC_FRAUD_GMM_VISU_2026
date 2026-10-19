@@ -245,7 +245,7 @@ Data: 2026-10-18 00:47:22
 - Detalhes: passos/07_visualizacao/resumo.md.
 
 
-## ETAPA 08 - PLANEJADA
+## ETAPA 08 - PLANEJADA (HISTORICO SUBSTITUIDO)
 
 Data: 2026-10-18 00:53:53
 
@@ -262,6 +262,29 @@ Data: 2026-10-18 00:53:53
 - Validar cache, retomada e reproducibilidade.
 - F10 permanece reservado.
 - Somente apos a aprovacao seguir para o cluster.
+- Plano: passos/08_execucao_local/plano.md.
+- Proxima tarefa: 08.01.
+
+
+
+## ETAPA 08 - PLANEJAMENTO REVISADO
+
+Data: 2026-10-18 14:34:04
+
+- Plano anterior substituido.
+- Novo plano: 30 subetapas.
+- Primeiro: PCA e t-SNE com 10% do desenvolvimento.
+- Amostra comum, estratificada e deterministica.
+- Auditoria de cada arquivo de saida.
+- Auditoria dos 15 tipos de graficos aplicaveis.
+- Inclusao de comparacoes PCA x t-SNE.
+- Revisao visual, numerica e metodologica.
+- Correcao e repeticao de testes necessarios.
+- Aprovacao formal dos ensaios de 10%.
+- Depois: PCA e t-SNE com 100% do desenvolvimento.
+- Nova auditoria dos outputs completos.
+- F10 preservado.
+- Cluster universitario somente apos validacao local.
 - Plano: passos/08_execucao_local/plano.md.
 - Proxima tarefa: 08.01.
 

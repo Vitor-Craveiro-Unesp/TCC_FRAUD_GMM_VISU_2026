@@ -31,7 +31,15 @@ from src import visualizacao_geometrica as geo
 from src import visualizacao_oof as oof
 
 FORMATS = ('.png', '.pdf', '.svg')
-NOMES_GEO = dict(zip(geo.TIPOS,range(7,16)))
+NOMES_GEO = dict(geo.NUM)
+GEO_PREFIXOS = {
+    'painel_parametros_gaussianos': '09_painel_parametros_gaussianos',
+    'pca_cotovelo': '11_pca_cotovelo',
+    'pca_projecoes': '12_pca_projecao_',
+    'tsne_mapa': '13_tsne_mapa_',
+    'tsne_diagnostico': '14_tsne_diagnostico',
+    'mapa_risco_fronteira': 'GMM08_mapa_risco_',
+}
 
 
 def _exigir(condicao, mensagem):
@@ -155,6 +163,7 @@ def _desenhar_complementar(config,data,escolha_complementar,arquivo):
         ax.text(.02,.02,f'Limiar MCC OOF={limiar:.5g} fora da faixa/sem contorno nesta malha',
                 transform=ax.transAxes,color='white',fontsize=9,
                 bbox={'facecolor':'black','alpha':.65,'edgecolor':'none'})
+    regra=geo._regra_gaussianas(config,rh)
     for k in range(len(gmm.saidas_)):
         media=np.asarray(gmm.modelo_.means_[k],dtype=float)
         cov=geo._covariancia(gmm,k)
@@ -169,10 +178,16 @@ def _desenhar_complementar(config,data,escolha_complementar,arquivo):
                 linestyle='-' if sigma==2 else ':',alpha=alpha if sigma==1 else .45))
         ax.plot(media[0],media[1],marker='x',ms=8,color='white',mew=2)
         risco_k=float(rh.riscos_.iloc[k]); peso_k=float(gmm.modelo_.weights_[k])
-        ax.annotate(f'G{k+1} | RH={risco_k:.4g} | peso={peso_k:.2f}',
+        ax.annotate(f'G{k+1} | RH={risco_k:.4g} | peso={peso_k:.2f}\n'
+                     f'{geo._rotulo_gaussiana(risco_k,regra)[1]}',
                     xy=media,xytext=(5,6),textcoords='offset points',
                     fontsize=8,color='white',weight='bold',
                     path_effects=[])
+    fig.text(.5,.025,
+             f"Rotulo gaussiano: alto risco se RH >= {regra['multiplicador_prevalencia']:.3g} x "
+             f"prevalencia do treino ({regra['prevalencia_treino']:.4%}) = "
+             f"{regra['limiar_alto_risco_gaussiana']:.4%}. Apenas descritivo.",
+             ha='center',fontsize=9)
     ax.set(xlabel='PC1 — candidato 2D',ylabel='PC2 — candidato 2D')
     ax.set_title('COMPLEMENTAR — nuvens gaussianas + risco + fronteira (NAO E O VENCEDOR)\n'
                  f'PCA=2, K={len(gmm.saidas_)} | ajuste: desenvolvimento F1–F9 | '
@@ -180,7 +195,7 @@ def _desenhar_complementar(config,data,escolha_complementar,arquivo):
     handles,labels=ax.get_legend_handles_labels()
     if handles:ax.legend(loc='best',fontsize=8,facecolor='#eee',framealpha=.85)
     ax.set_xlim(a[0],a[-1]);ax.set_ylim(b[0],b[-1])
-    fig.tight_layout()
+    fig.tight_layout(rect=[0,0.04,1,1])
     if arquivo.exists():
         plt.close(fig)
         raise FileExistsError(f'Grafico complementar preexistente sem manifesto validado: {arquivo}')
@@ -195,7 +210,8 @@ def _desenhar_complementar(config,data,escolha_complementar,arquivo):
         geo._salvar_dados(tabela,arquivo.parent,arquivo.stem,True)
     return {'fronteira_mcc_visivel':bool(fronteira_desenhada),
             'risco_minimo_malha':float(risco.min()),'risco_maximo_malha':float(risco.max()),
-            'n_pontos_malha':int(n*n),'n_scatter':len(idx)}
+            'n_pontos_malha':int(n*n),'n_scatter':len(idx),
+             'regra_rotulagem_descritiva':regra}
 
 
 def _verificar_geracoes(experimento,config,escolha,*,executar):
@@ -213,7 +229,15 @@ def _verificar_geracoes(experimento,config,escolha,*,executar):
 
     def completos():
         imagens_oof=all((oof_dir/(oof.ARQUIVOS[n]+ext)).is_file() for n in oof_ativos)
-        imagens_geo=all(any(geo_dir.glob(f'{NOMES_GEO[n]:02d}_*{ext}')) for n in esperado_geo)
+        imagens_geo=all(
+            (
+                ((geo_dir/f'GMM08_mapa_risco_1d_comparativo{ext}').is_file()
+                  if int(escolha['configuracao']['reducao']['n_components'])==1
+                  else all((geo_dir/f'GMM08_mapa_risco_{int(escolha["configuracao"]["reducao"]["n_components"])}d_{corte}{ext}').is_file()
+                           for corte in ('fixo','mcc')))
+                if n=='mapa_risco_fronteira'
+                else any(geo_dir.glob(f'{GEO_PREFIXOS[n]}*{ext}'))
+            ) for n in esperado_geo)
         return imagens_oof,imagens_geo
 
     tem_oof,tem_geo=completos()
@@ -294,8 +318,8 @@ def _complementar(experimento,config,grade,escolha,*,executar):
 def _html_galeria(experimento,arquivos,escolha,complemento,metodo,tipo):
     blocos=[]
     for secao,titulo,aviso in (
-        ('oof','01–06 — Validacao OOF','Predicoes fora do treino; somente o grafico 06 compara os candidatos.'),
-        ('geometria_desenvolvimento','07–15 — Diagnosticos do vencedor','Modelo reajustado em F1–F9. Esta pasta NAO contem medidas do F10.'),
+        ('oof','00–06 — Painel e validacao OOF','Predicoes fora do treino; somente o grafico 06 compara os candidatos.'),
+        ('geometria_desenvolvimento','GMM 08/09 e diagnosticos PCA/t-SNE do vencedor','Modelo reajustado em F1–F9. Esta pasta NAO contem medidas do F10.'),
         ('complementar_2d','16 — Diagnostico 2D complementar','Outro candidato da grade OOF; NAO representa a fronteira do vencedor.')
     ):
         fotos=[(p,n) for p,n in arquivos if p.parts[0]==secao]
@@ -360,8 +384,20 @@ def integrar(experimento, *, planejar=False, complementar_2d=True):
     for origem,secao in ((od,'oof'),(gd,'geometria_desenvolvimento')):
         if not origem.is_dir():continue
         for arq in sorted(origem.iterdir()):
-            if (arq.is_file() and arq.suffix.lower() in FORMATS and
-                arq.name[:2].isdigit() and 1<=int(arq.name[:2])<=15):
+            if not arq.is_file() or arq.suffix.lower() not in FORMATS:
+                continue
+            if secao=='oof':
+                permitido=arq.stem in (oof.ARQUIVOS[n] for n in ativos_oof)
+            else:
+                # Ignorar imagens legadas 07/08/09-heatmap/10 ainda no disco.
+                permitido=any(arq.stem.startswith(GEO_PREFIXOS[n]) for n in ativos_geo
+                              if n != 'mapa_risco_fronteira')
+                if 'mapa_risco_fronteira' in ativos_geo:
+                    dim=int(escolha['configuracao']['reducao']['n_components'])
+                    mapas={'GMM08_mapa_risco_1d_comparativo'} if dim==1 else {
+                        f'GMM08_mapa_risco_{dim}d_fixo',f'GMM08_mapa_risco_{dim}d_mcc'}
+                    permitido=permitido or arq.stem in mapas
+            if permitido:
                 relativo=Path(secao)/arq.name
                 _arquivo_seguro_copiar(arq,base/relativo)
                 salvos.append((relativo,arq.stem.replace('_',' ')))

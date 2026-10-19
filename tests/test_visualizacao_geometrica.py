@@ -35,7 +35,7 @@ def sint(cfg):
     pca['pca']['n_components']=[1,2,3]
     can={'metodo':'PCA', 'modo':'NORMAL','razao':None,
          'reducao':{'n_components':1,'whiten':False,'svd_solver':'auto','iterated_power':'auto'},
-         'gmm':{'n_components':4,'covariance_type':'diag','reg_covar':1e-6,
+         'gmm':{'n_components':4,'covariance_type':'full','reg_covar':1e-6,
                 'max_iter':300,'n_init':2,'tol':.001,'init_params':'kmeans'},
          'suavizacao':0.0}
     escolha={'id_candidato':'modelo_sint','configuracao':can,'limiar_mcc_oof':.12,'teste_final_usado':False}
@@ -54,40 +54,59 @@ def test_vencedor_pca_1d_treinado_sem_grid(sint):
     assert 0<r['rh'].prevalencia_treino_<1
 
 
-def test_sete_tipos_pca_salvos(sint,tmp_path):
+def test_quatro_tipos_pca_com_painel_salvos(sint,tmp_path):
     df,c,e=sint
     data=m._treinar_vencedor(df,c,e)
     ext,dpi,csv=m._estilo(c)
-    m._risco_por_gaussiana(c,data,tmp_path,ext,dpi,csv)
-    m._pesos(c,data,tmp_path,ext,dpi,csv)
-    m._medias(c,data,tmp_path,ext,dpi,csv)
-    m._covariancias(c,data,tmp_path,ext,dpi,csv)
+    m._painel_parametros_gaussianos(c,data,tmp_path,ext,dpi,csv)
     m._scree(c,data,tmp_path,ext,dpi,csv)
     m._projecoes(c,data,tmp_path,ext,dpi,csv,'PCA')
-    m._fronteira(c,data,e,tmp_path,ext,dpi,csv)
+    m._fronteira(c,data,e,tmp_path,ext,dpi,csv,
+                avaliacao={"y":data["y"],"p":data["scores"]})
     m._relatorio(c,data,tmp_path)
     imagens=sorted(tmp_path.glob('*.png'))
-    assert len(imagens)==7,imagens
+    assert len(imagens)==4,imagens
     assert (tmp_path/'relatorio_gaussianas_desenvolvimento.csv').exists()
     assert (tmp_path/'relatorio_gaussianas_desenvolvimento.json').exists()
-    assert len(pd.read_csv(tmp_path/'07_risco_por_gaussiana.csv'))==4
-    assert len(pd.read_csv(tmp_path/'15_mapa_risco_1d_PC1.csv'))==60
+    assert len(pd.read_csv(tmp_path/'09_painel_parametros_gaussianos.csv'))==4
+    assert len(pd.read_csv(tmp_path/'GMM08_malha_PC1.csv'))==60
+    assert (tmp_path/'GMM08_mapa_risco_1d_comparativo.png').exists()
+    assert not (tmp_path/'GMM08_mapa_risco_1d_fixo.png').exists()
+    assert not (tmp_path/'GMM08_mapa_risco_1d_mcc.png').exists()
     assert 'F10' in (tmp_path/'relatorio_gaussianas_desenvolvimento.md').read_text(encoding='utf-8')
 
 
-def test_respeita_pares_geometricos_de_2d_e_3d(sint,tmp_path):
+def test_respeita_pares_geometricos_de_2d_e_3d(sint,tmp_path,monkeypatch):
     df,c,e=sint
     d=copy.deepcopy(e)
     d['configuracao']['reducao']['n_components']=3
     data=m._treinar_vencedor(df,c,d)
     assert m._pares(3,c)==[(0,1),(0,2),(1,2)]
-    m._fronteira(c,data,d,tmp_path,'png',60,True)
-    assert len(list(tmp_path.glob('15_mapa_risco_*.png')))==3
+    capturas=[]
+    salvar_original=m._guardar
+    def espiar_figura(fig,dest,nome,ext,dpi):
+        if nome.startswith('GMM08_mapa_risco_3d_'):
+            titulos=[ax.get_title() for ax in fig.axes[:3]]
+            legenda=[t.get_text() for l in fig.legends for t in l.get_texts()]
+            rodapes=[t.get_text() for t in fig.texts]
+            capturas.append((titulos,legenda,rodapes,fig.axes[-1].get_position().x1))
+        return salvar_original(fig,dest,nome,ext,dpi)
+    monkeypatch.setattr(m,'_guardar',espiar_figura)
+    m._fronteira(c,data,d,tmp_path,'png',60,True,
+                avaliacao={"y":data["y"],"p":data["scores"],"origem":"simulado"})
+    assert len(capturas)==2
+    for titulos,legenda,rodapes,cbar_direita in capturas:
+        assert all('fixada na média do desenvolvimento' in titulo for titulo in titulos)
+        assert all(any(f'G{k} ' in titulo for titulo in legenda) for k in range(1,5))
+        assert any('MCC da simulação' in texto for texto in rodapes)
+        assert cbar_direita < .95
+    assert len(list(tmp_path.glob('GMM08_mapa_risco_*.png')))==2
+    assert len(list(tmp_path.glob('GMM08_malha_*.csv')))==3
     m._projecoes(c,data,tmp_path,'png',60,True,'PCA')
     assert len(list(tmp_path.glob('12_pca_projecao_*.png')))==3
 
 
-def test_covar_diag_nao_cria_dependencias(sint):
+def test_covar_full_em_1d(sint):
     df,c,e=sint
     d=m._treinar_vencedor(df,c,e)
     z=m._covariancia(d['gmm'],0)
@@ -96,10 +115,10 @@ def test_covar_diag_nao_cria_dependencias(sint):
 
 
 def test_flag_e_exclusao_grafico_nao_aplicavel(cfg):
-    assert m._ativo(cfg,'risco_por_gaussiana')
+    assert m._ativo(cfg,'painel_parametros_gaussianos')
     c=copy.deepcopy(cfg)
-    c['visualizacao']['graficos']['risco_por_gaussiana']['habilitar']=False
-    assert not m._ativo(c,'risco_por_gaussiana')
+    c['visualizacao']['graficos']['painel_parametros_gaussianos']['habilitar']=False
+    assert not m._ativo(c,'painel_parametros_gaussianos')
 
 
 def test_nunca_permite_limiar_invalido(cfg):
@@ -122,7 +141,7 @@ def test_planejar_nao_reajusta_ou_le_parquet(cfg, sint, tmp_path, monkeypatch):
     monkeypatch.setattr(m,'_treinar_vencedor',lambda *a: pytest.fail('Nao pode treinar no planejamento'))
     r=m.executar(exp,raiz=tmp_path,somente_planejar=True)
     assert r['planejamento'] is True
-    assert len(r['graficos'])==7
+    assert len(r['graficos'])==4
     assert 'tsne_mapa' not in r['graficos']
 
 

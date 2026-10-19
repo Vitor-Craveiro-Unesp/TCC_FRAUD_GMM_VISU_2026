@@ -124,11 +124,11 @@ def test_integrar_dois_graficos_sem_treinar_complementar(monkeypatch,tmp_path,co
     for name in list(m.oof.ARQUIVOS):
         config['visualizacao']['graficos'][name]['habilitar']=(name=='curva_pr')
     for name in list(geo.TIPOS):
-        config['visualizacao']['graficos'][name]['habilitar']=(name=='risco_por_gaussiana')
+        config['visualizacao']['graficos'][name]['habilitar']=(name=='painel_parametros_gaussianos')
     od=root/'oof'/'graficos_gerados';gd=root/'teste_final'/'graficos_gerados'
     od.mkdir(parents=True);gd.mkdir(parents=True)
     (od/'01_curva_precision_recall.png').write_bytes(b'png1')
-    (gd/'07_risco_por_gaussiana.png').write_bytes(b'png2')
+    (gd/'09_painel_parametros_gaussianos.png').write_bytes(b'png2')
     (od/'manifesto_graficos_oof_07_01.json').write_text(json.dumps({'id_vencedor':'winner','usa_f10':False}),encoding='utf-8')
     (gd/'manifesto_geometria_07_02.json').write_text(json.dumps({'id_vencedor':'winner',
         'f10_utilizado':False,'origem':'desenvolvimento_F1_F9'}),encoding='utf-8')
@@ -171,3 +171,29 @@ def test_manifesto_geometrico_invalido_impede_integracao(monkeypatch,tmp_path,co
     (root/'manifesto.json').write_text('{"status":"concluido_06_03","tipo":"ensaio"}',encoding='utf-8')
     with pytest.raises(ValueError,match='Manifesto do 07.02'):
         m.integrar(root,planejar=True)
+
+
+def test_galeria_inclui_painel_00(monkeypatch,tmp_path,config,ranking):
+    grade,escolha=ranking
+    root=tmp_path/'ensaio';root.mkdir()
+    (root/'manifesto.json').write_text('{"status":"concluido_06_03","tipo":"ensaio"}')
+    for nome in m.oof.ARQUIVOS:
+        config['visualizacao']['graficos'][nome]['habilitar']=(nome=='painel_score_composto')
+    for nome in geo.TIPOS:
+        config['visualizacao']['graficos'][nome]['habilitar']=(nome=='painel_parametros_gaussianos')
+    od=root/'oof'/'graficos_gerados';gd=root/'teste_final'/'graficos_gerados'
+    od.mkdir(parents=True);gd.mkdir(parents=True)
+    (od/'00_painel_score_composto.png').write_bytes(b'fake-png-painel')
+    (gd/'09_painel_parametros_gaussianos.png').write_bytes(b'fake-png-gmm')
+    (od/'manifesto_graficos_oof_07_01.json').write_text(
+        json.dumps({'id_vencedor':'winner','usa_f10':False}))
+    (gd/'manifesto_geometria_07_02.json').write_text(
+        json.dumps({'id_vencedor':'winner','f10_utilizado':False,
+                    'origem':'desenvolvimento_F1_F9'}))
+    monkeypatch.setattr(m.oof,'_ler_resultados',lambda _: (config,grade,escolha,np.array([]),np.array([])))
+    resultado=m.integrar(root,planejar=False,complementar_2d=False)
+    assert resultado['numero_imagens']==2
+    painel=root/'visualizacao_consolidada'/'oof'/'00_painel_score_composto.png'
+    assert painel.read_bytes()==b'fake-png-painel'
+    html=(root/'visualizacao_consolidada'/'index.html').read_text()
+    assert '00_painel_score_composto.png' in html

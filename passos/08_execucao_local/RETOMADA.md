@@ -1,75 +1,44 @@
 ﻿# TCC_EXPERIMENTAL_V3 - RETOMADA
 
-Ultima atualizacao: 2026-10-18 00:56:20
+Data: 2026-10-18 14:34:04
 
-## Situacao do projeto
+Status: ETAPA 08 REPLANEJADA.
 
-- Etapas 01 a 06: pipeline implementado e validado funcionalmente.
-- Etapa 07: visualizacao e diagnosticos concluidos.
-- Etapa 08: planejamento de 22 subetapas elaborado.
-- Etapa 08 ainda nao iniciada operacionalmente.
-- Proxima subetapa: 08.01.
+## O que ja esta concluido
 
-## Decisoes metodologicas
+- Etapas 01 a 07 implementadas.
+- Graficos OOF implementados.
+- Diagnosticos gaussianos implementados.
+- Galeria consolidada implementada.
+- Mapa PCA 2D complementar implementado.
+- Ensaio PCA anterior de 10% realizado.
 
-- Utilizar F1 a F9 para desenvolvimento.
-- Manter F10 intocado ate a avaliacao final.
-- Realizar execucoes locais completas.
-- Testar PCA e t-SNE separadamente.
-- Comecar com um candidato por metodo.
-- Utilizar poucos hiperparametros no notebook.
-- Reservar grades extensas para o cluster.
-- Nao considerar ensaios amostrais como resultado final.
+## Decisao atual
 
-## Base
+Refazer validacao PCA e iniciar validacao t-SNE
+com os mesmos 10% do desenvolvimento.
 
-- Total: 1852394 transacoes.
-- Desenvolvimento: 1667155 transacoes.
-- F10 reservado: 185239 transacoes.
+Auditar cada arquivo, metrica e grafico.
 
-## Validacoes anteriores
+Gerar comparacoes PCA x t-SNE.
 
-- Ensaio local com 10% do desenvolvimento.
-- PCA [1,2,3] e GMM [2,4].
-- 54 ajustes OOF concluidos.
-- Tempo observado: 132.57 segundos.
-- Vencedor exploratorio: PCA=1 e GMM=4.
-- Score exploratorio: 0.501178.
-- Visualizacoes OOF e geometricas implementadas.
-- Mapa complementar 2D implementado.
-- Galeria HTML implementada.
+Corrigir e revalidar o que for necessario.
 
-## Etapa 08 - Objetivo
+Somente apos aprovar os ensaios de 10%,
+executar os dois metodos com a base completa.
 
-Executar separadamente PCA e t-SNE utilizando
-100% dos dados de desenvolvimento.
+Cluster universitario vem depois.
 
-Auditar arquivo por arquivo e grafico por grafico.
+## Plano oficial
 
-Verificar metricas, gaussianas, responsabilidades,
-fronteiras de decisao, distribuicoes e embeddings.
-
-Identificar melhorias, corrigir e validar novamente.
-
-O plano completo esta em:
 passos/08_execucao_local/plano.md
 
-## Proxima tarefa - 08.01
+Total: 30 subetapas.
 
-Auditoria de recursos computacionais:
+## Proxima tarefa
 
-1. Conferir RAM e armazenamento.
-2. Conferir dependencias e ambiente Python.
-3. Conferir integridade dos folds.
-4. Avaliar consumo estimado de PCA e t-SNE.
-5. Preparar execucao local segura.
-6. Nao iniciar ainda a busca extensa de parametros.
+08.01 - Auditoria inicial.
 
-## Regra para avancar
+## Restricao
 
-A preparacao do cluster universitario so sera
-iniciada depois da auditoria e aprovacao local,
-ou apos documentarmos eventuais limitacoes
-computacionais que impeçam a execucao integral.
-
-F10 DEVE PERMANECER RESERVADO.
+F10 reservado e nao utilizado na Etapa 08.

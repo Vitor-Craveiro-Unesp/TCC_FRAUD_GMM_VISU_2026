@@ -197,7 +197,7 @@ gmm:
 
   # Opcoes: "full", "diag", "tied", "spherical".
   # "diag" geralmente economiza memoria/tempo em base grande.
-  covariance_type: "diag"
+  covariance_type: "full"
 
   # Float > 0; ex.: [1.0e-6, 1.0e-5, 1.0e-4].
   reg_covar: 0.000001
@@ -308,7 +308,7 @@ saidas:
   registrar_versoes_bibliotecas: true
 
 # ============================================================
-# VISUALIZACAO — 18 TIPOS DE GRAFICOS, UM CONTROLE POR TIPO
+# VISUALIZACAO — PAINEL 00-06 + DIAGNOSTICOS CONDICIONAIS GMM/PCA/TSNE
 # ============================================================
 # NAO E GRID: listas nesta secao sao OPCOES VISUAIS, nunca busca.
 # OOF usa predicoes realmente OOF (nenhum grafico treina em teste).
@@ -365,6 +365,23 @@ visualizacao:
 
   graficos:
     # --------------------------------------------------------
+    # 00 — PAINEL COMPOSTO DE DESEMPENHO (OOF DO VENCEDOR)
+    # --------------------------------------------------------
+    painel_score_composto:
+      habilitar: true
+      gerar_em: ["oof"]                # Nao utiliza F10 ou teste final.
+      cor_fundo: "#07101f"
+      cor_cartao: "#111d33"
+      # Refinamento de legibilidade; nao e grade de hiperparametros.
+      figsize: [10.2, 15.0]
+      fonte_titulo: 21
+      fonte_secundaria: 10.5
+      fonte_rodape: 9.6
+      # Indicadores: AP, (MCC+1)/2, exp(-LogLoss), score composto.
+      # Baseline PR = prevalencia, MCC e LogLoss brutos na legenda.
+      # Cores graduadas nao estabelecem faixas universais de qualidade.
+
+    # --------------------------------------------------------
     # 01 — CURVA PRECISION-RECALL (AP, NAO AUC-PR TRAPEZOIDAL)
     # --------------------------------------------------------
     curva_pr:
@@ -372,6 +389,17 @@ visualizacao:
       gerar_em: ["oof", "teste_final"]
       mostrar_ap: true
       mostrar_baseline_prevalencia: true
+      # Pontos operacionais calculados sobre os MESMOS scores OOF.
+      mostrar_ponto_mcc_oof: true
+      mostrar_ponto_05: true
+      mostrar_resumo_operacional: true
+      # Zoom de LEITURA; nao altera dados, curva, AP nem limiar.
+      modo_eixos: "zoom_automatico"     # zoom_automatico ou manual.
+      zoom_recall_alvo: 0.35            # Limite minimo; inclui ponto MCC.
+      zoom_precision_alvo: 0.08         # Limite minimo; inclui ponto MCC.
+      # Sem miniatura sobreposta; o zoom nao altera os calculos.
+      ocultar_ponto_05_degenerado: true # Mantem P/R no rodape quando (0,0).
+      # Limites abaixo usados SOMENTE se modo_eixos: manual.
       limites_recall: [0.0, 1.0]        # [min, max], NAO e grid.
       limites_precision: [0.0, 1.0]
 
@@ -384,6 +412,14 @@ visualizacao:
       mostrar_limiar_oof: true
       mostrar_mcc_no_limiar_oof: true
       mostrar_limiar_05: true
+      mostrar_mcc_no_limiar_05: true    # MCC bruto calculado nos mesmos scores OOF.
+      mostrar_linha_mcc_zero: true
+      mostrar_resumo_operacional: true  # τ*, MCC(τ*), 0,50 e MCC(0,50).
+      modo_eixos: "zoom_automatico"      # Opcoes: zoom_automatico, manual.
+      zoom_fracao_mcc_relevante: 0.025 # Parte relativa da amplitude do MCC para o zoom (apenas visual).
+      zoom_quantile_extremo: 0.005    # Aparar extremos visuais raros dos limiares relevantes.
+      zoom_margem_horizontal: 0.07   # Folga lateral proporcional a faixa informativa.
+      limites_limiar: [0.0, 1.0]        # Usados somente se modo_eixos: manual.
       pontos_visualizacao: 2000           # Somente densidade do DESENHO.
       # MCC otimo e selecionado pelos valores OOF completos, nao
       # pelos 300 pontos usados para visualizar a curva.
@@ -414,7 +450,10 @@ visualizacao:
       tipo: "histograma"               # Opcoes: histograma, densidade.
       bins: 50                          # Inteiro positivo.
       separar_classes: true
-      normalizar: true                  # Densidade; classes comparaveis.
+      normalizar: true                  # Histograma: frequencia relativa por classe (nao densidade).
+      modo_eixo_x: "zoom_automatico"    # zoom_automatico ou completo; NAO e grid.
+      quantil_zoom: 0.995               # Quantil de cada classe para foco visual.
+      margem_zoom: 0.10                 # Folga horizontal apos o quantil/limiar MCC.
       escala_y: "linear"                # Opcoes: linear, log.
       marcar_limiar_oof: true
       marcar_limiar_05: true
@@ -433,51 +472,18 @@ visualizacao:
       maximo_configuracoes: 25          # Grafico; tabela CSV pode ter todas.
 
     # --------------------------------------------------------
-    # 07 — RISCO HISTORICO POR COMPONENTE GAUSSIANA
-    # --------------------------------------------------------
-    risco_por_gaussiana:
-      habilitar: true
-      gerar_em: ["teste_final"]         # Diagnostico do modelo final treinado no desenvolvimento.
-      tipo: "barra_horizontal"          # Opcoes: barra, barra_horizontal.
-      ordenar_por: "risco_decrescente"  # Opcoes: indice, risco_crescente, risco_decrescente.
-      mostrar_risco: true
-      mostrar_prevalencia_desenvolvimento: true
-      mostrar_intervalo_aproximado: false  # Se implementado, explicitar metodo.
-
-    # --------------------------------------------------------
-    # 08 — PESOS DO GMM E MASSA DE RESPONSABILIDADES
-    # --------------------------------------------------------
-    pesos_responsabilidades:
+    # GMM 09 — PAINEL MATEMATICO DOS COMPONENTES (PDF)
+    # Substitui graficos isolados 07, 08, 09 heatmap e 10 heatmap.
+    # Inclui pi_k, r_k, rotulo relativo a 2x prevalencia, mu_k, Sigma_k.
+    # A rotulagem e DESCRITIVA; nao e a decisao da transacao.
+    painel_parametros_gaussianos:
       habilitar: true
       gerar_em: ["teste_final"]
-      mostrar_peso_mistura: true
-      mostrar_massa_total: true
-      mostrar_massa_fraude: true
-      mostrar_massa_legitima: true
-      # Massas sao calculadas no desenvolvimento, nunca com labels do teste.
+      gaussianas_por_pagina: 4     # Maximo de 4 componentes por imagem.
 
     # --------------------------------------------------------
-    # 09 — HEATMAP DOS VETORES DE MEDIAS DAS GAUSSIANAS
-    # --------------------------------------------------------
-    medias_gaussianas:
-      habilitar: true
-      gerar_em: ["teste_final"]
-      tipo: "heatmap"                  # Ex.: heatmap; vetores em CSV completo.
-      anotacoes_numericas: true
-      maximo_dimensoes_exibidas: 12     # Visual; CSV preserva o vetor inteiro.
-
-    # --------------------------------------------------------
-    # 10 — VARIANCIAS/COVARIANCIAS DO GMM
-    # --------------------------------------------------------
-    covariancias_gaussianas:
-      habilitar: true
-      gerar_em: ["teste_final"]
-      tipo: "heatmap"                  # Heatmap por componente.
-      mostrar_diagonal: true
-      mostrar_fora_diagonal: true       # Apenas relevante para full/tied.
-      # diag/spherical: exibir variancias; nunca inventar covariancias.
-      maximo_gaussianas: 16            # Grafico; todas salvas no relatorio.
-
+    # Os graficos separados 07/08/09-heatmap/10 foram retirados.
+    # Seus dados completos permanecem no relatorio por gaussiana.
 
     # --------------------------------------------------------
     # 11 — COTOVELO / SCREE PLOT DO PCA
@@ -534,26 +540,45 @@ visualizacao:
       # Nao inventar historico de iteracoes se nao estiver disponivel.
 
     # --------------------------------------------------------
-    # 15 — MAPA DE RISCO E FRONTEIRA DE DECISAO
+    # GMM 08 — MAPA DE RISCO, FRONTEIRA E GEOMETRIA 95% (PDF)
+    # Dois arquivos: corte 0.50 e corte MCC OOF, mesma malha/cores.
+    # A mascara mudou_classe e XOR dos dois cortes sobre mesmo score.
+    # Nao se usa MCC calculado na malha; apenas nas predicoes OOF.
+    # Em 3D, cada arquivo contem os tres cortes 2D com demais eixos
+    # fixados na media do DESENVOLVIMENTO; elipsoides FULL 95%.
     # --------------------------------------------------------
     mapa_risco_fronteira:
       habilitar: true
       gerar_em: ["teste_final"]
-      limiares: ["mcc_oof", 0.5]        # Opcoes: mcc_oof, 0.5, [mcc_oof, 0.5].
+      limiares: [0.5, "mcc_oof"] # Comparacao obrigatoria; nao e grid.
       n_pontos_scatter: 5000
       resolucao_1d: 500
-      resolucao_2d: 180               # Malha: 180x180=32400 pontos.
+      resolucao_2d: 180
       margem: 0.15
       mostrar_gaussianas: true
-      n_desvios: 2.0                  # Elipses/contornos ilustrativos.
-      # Quando dimensoes >2: plotar cortes nos pares de geometria,
-      # fixando as dimensoes NAO exibidas na media do desenvolvimento.
-      # NAO chamar isso de fronteira total projetada do classificador.
+      cobertura_gaussiana: 0.95 # Intervalos normais 1D e qui-quadrado 2D/3D.
       fixar_demais_dimensoes: "media_desenvolvimento"
 
   # CONFIGURACAO COMUM AS DUAS MATRIZES ACIMA.
   # Ordem do sklearn: [[TN, FP], [FN, TP]]; linhas=reais.
   estilo_matrizes:
+    # Layout do catalogo PDF: 4 cartoes/quadrantes por limiar.
+    # 03 = corte fixo 0.50; 04 = corte MCC OOF (sem mudar numeracao).
+    layout: "quadrantes_pdf"
+    # Faixas ilustrativas do PDF, em PERCENTUAIS DA CLASSE REAL.
+    # Nao sao regras universais; cada eixo e interpretado conforme o quadrante.
+    # TN e TP: maior e melhor. FP e FN: menor e melhor.
+    faixas_qualidade:
+      tn: [85.0, 97.0]  # <85 ruim; 85..97 medio; >=97 bom
+      fp: [1.0, 5.0]    # <=1 bom; 1..5 medio; >5 ruim
+      fn: [10.0, 30.0] # <=10 bom; 10..30 medio; >30 ruim
+      tp: [40.0, 70.0] # <40 ruim; 40..70 medio; >=70 bom
+    cores_painel:
+      fundo: "#091425"
+      cartao: "#12213b"
+      borda: "#294766"
+      texto: "#f6f8fc"
+      secundario: "#b2bfd3"
     mostrar:
       contagem_observada: true         # Quantidade de casos em cada celula.
       contagem_ideal: true            # TN=Nneg, TP=Npos, FP=FN=0.
@@ -614,8 +639,7 @@ visualizacao:
       rotulo_descritivo_risco: true
     # Rotulo apenas para EXPLICACAO, NAO altera o soft assignment.
     rotulo_descritivo:
-      estrategia: "relativo_prevalencia" # Opcoes: relativo_prevalencia, limiar_absoluto.
-      multiplicador_prevalencia: 2.0    # 2x prevalencia => risco elevado.
-      limiar_absoluto: 0.5             # Usado so se estrategia=limiar_absoluto.
+      estrategia: "relativo_prevalencia" # Unica regra descritiva permitida.
+      multiplicador_prevalencia: 2.0    # r_k >= 2x prevalencia TREINO => alto risco.
       rotulo_alto: "alto_risco_fraude"
       rotulo_baixo: "baixo_risco_fraude"
