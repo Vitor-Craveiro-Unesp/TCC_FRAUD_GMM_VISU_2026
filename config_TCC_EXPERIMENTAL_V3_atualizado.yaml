@@ -472,6 +472,48 @@ visualizacao:
       maximo_configuracoes: 25          # Grafico; tabela CSV pode ter todas.
 
     # --------------------------------------------------------
+    # GMM 01 — DENSIDADES MARGINAIS POR DIMENSAO (PDF)
+    # 1D: uma imagem; 2D: duas imagens; 3D: tres imagens.
+    # Componentes ponderados por pi_k e sua soma (mistura total).
+    # Densidade marginal nao representa probabilidade de fraude.
+    # --------------------------------------------------------
+    densidades_marginais:
+      habilitar: true
+      gerar_em: ["teste_final"]  # Ajuste no desenvolvimento, nunca F10.
+      pontos_curva: 600          # Resolucao apenas visual; nao e grid.
+      margem_sigmas: 4.0        # Incluir caudas marginais das gaussianas.
+
+    # --------------------------------------------------------
+    # GMM 04 — REGIOES DE DOMINANCIA DOS COMPONENTES (PDF)
+    # k*(x) = argmax_k gamma_k(x); NAO define fraude ou nao fraude.
+    # 1D: intervalos; 2D: areas; 3D: tres cortes com o restante fixado na media.
+    # Cores tab10 identicas as dos painéis gaussianos.
+    # --------------------------------------------------------
+    regioes_dominancia:
+      habilitar: true
+      gerar_em: ["teste_final"]  # Geometria apenas do desenvolvimento F1–F9.
+      resolucao_1d: 600
+      resolucao_2d: 180
+      pontos_scatter: 1000         # Apenas amostra visual, nao altera o GMM.
+      margem: 0.15
+
+    # --------------------------------------------------------
+    # GMM 07 — SENSIBILIDADE DA FRONTEIRA AO LIMIAR (PDF)
+    # Um comparativo com dois cortes (0,50 e MCC OOF) na MESMA
+    # funcao de risco FULL. Sem elipses: reservadas ao GMM 08.
+    # MCC calculado exclusivamente nas predicoes OOF, NAO na malha.
+    # Em 3D, cortes PC1-PC2, PC1-PC3, PC2-PC3, com terceira
+    # coordenada fixada na media do desenvolvimento.
+    # --------------------------------------------------------
+    sensibilidade_fronteira:
+      habilitar: true
+      gerar_em: ["teste_final"]  # Geometria F1-F9, nao F10.
+      resolucao_1d: 500
+      resolucao_2d: 180
+      n_pontos_scatter: 1500
+      margem: 0.15
+
+    # --------------------------------------------------------
     # GMM 09 — PAINEL MATEMATICO DOS COMPONENTES (PDF)
     # Substitui graficos isolados 07, 08, 09 heatmap e 10 heatmap.
     # Inclui pi_k, r_k, rotulo relativo a 2x prevalencia, mu_k, Sigma_k.
@@ -495,6 +537,9 @@ visualizacao:
       mostrar_variancia_individual: true
       mostrar_variancia_acumulada: true
       destacar_componentes_selecionados: true
+      # PDF PCA 11: barras verdes, linha vermelha e dois eixos verticais.
+      marcar_acumulados: [1, 2, 3]         # Rotulos C(1), C(2), C(3); nao e grid.
+      linhas_referencia_acumulada: [0.80, 0.90, 0.95]  # Guias visuais; nao selecionam K.
       # Para mostrar o espectro alem do K escolhido, calcular
       # ajuste DIAGNOSTICO apenas no desenvolvimento, sem escolher
       # novo K pelo teste. Nao misturar eixos de PCA de folds.
@@ -506,6 +551,10 @@ visualizacao:
       habilitar: true
       gerar_em: ["teste_final"]
       somente_se_metodo: "PCA"
+      # PDF PCA 12: vencedor 1 PC -> histograma PC1, SEM y artificial.
+      bins_histograma_1d: 36
+      curvas_suavizadas_1d: true
+      marcar_media_pc1_1d: true
       mostrar_dados_desenvolvimento: true
       mostrar_dados_teste: true
       colorir_por: "classe_real"        # Opcoes: classe_real, classe_predita, risco, gaussiana_dominante.
@@ -515,7 +564,23 @@ visualizacao:
       # PCs diferentes aprendidas nos 9 folds.
 
     # --------------------------------------------------------
-    # 13 — EMBEDDING t-SNE EM 1D / 2D, COM PARES SE 3D
+    # 02 t-SNE — Preservacao local (somente diagnostico no desenvolvimento)
+    # Sempre limitado por amostra: 6 ou mais fits podem ser custosos.
+    # Nao muda o vencedor OOF nem o embedding t-SNE usado no GMM.
+    # Nao acessa F10, nao usa rotulos e nao escolhe hiperparametros.
+    # 02 do t-SNE ≠ 02 MCC por limiar OOF.
+    # --------------------------------------------------------
+    tsne_trustworthiness:
+      habilitar: true
+      gerar_em: ["teste_final"]
+      somente_se_metodo: "TSNE"
+      perplexidades: [5, 10, 20, 30, 50, 80]
+      incluir_perplexity_vencedora: true
+      tamanho_amostra_maximo: 360
+      vizinhos_trustworthiness: 10
+
+    # --------------------------------------------------------
+    # 13 — EMBEDDING t-SNE EM 1D / 2D / 3D reais
     # --------------------------------------------------------
     tsne_mapa:
       habilitar: true
@@ -526,6 +591,7 @@ visualizacao:
       colorir_por: "classe_real"        # Opcoes: classe_real, classe_predita, risco, gaussiana_dominante.
       usar_estilos_classes: true
       mostrar_contornos_gaussianas: false # Interpretar com cautela em t-SNE.
+      # Em 3D, gerar projeção tridimensional verdadeira, sem pares ficticios.
 
     # --------------------------------------------------------
     # 14 — DIAGNOSTICO t-SNE (KL / OTIMIZACAO)
@@ -537,6 +603,7 @@ visualizacao:
       mostrar_kl_final: true
       mostrar_kl_por_iteracao: true     # Apenas se o algoritmo fornecer historico.
       mostrar_tempo_execucao: true
+      # Exibir informacoes e CSV, mesmo sem historico de iteracoes.
       # Nao inventar historico de iteracoes se nao estiver disponivel.
 
     # --------------------------------------------------------

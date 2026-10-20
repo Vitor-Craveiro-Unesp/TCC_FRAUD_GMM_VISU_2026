@@ -39,11 +39,12 @@ from src.probabilidade import PreditorProbabilisticoGMM
 # pelo painel GMM 09, conforme o catalogo. Nao renumerar PCA/t-SNE.
 TIPOS = (
     'painel_parametros_gaussianos', 'pca_cotovelo', 'pca_projecoes',
-    'tsne_mapa', 'tsne_diagnostico', 'mapa_risco_fronteira',
+    'tsne_trustworthiness', 'tsne_mapa', 'tsne_diagnostico', 'mapa_risco_fronteira',
+    'sensibilidade_fronteira', 'densidades_marginais', 'regioes_dominancia',
 )
-NUM = {'painel_parametros_gaussianos': 9, 'pca_cotovelo': 11,
-       'pca_projecoes': 12, 'tsne_mapa': 13, 'tsne_diagnostico': 14,
-       'mapa_risco_fronteira': 15}
+NUM = {'densidades_marginais': 1, 'regioes_dominancia': 4, 'painel_parametros_gaussianos': 9, 'pca_cotovelo': 11,
+       'pca_projecoes': 12, 'tsne_trustworthiness': 2, 'tsne_mapa': 13, 'tsne_diagnostico': 14,
+       'mapa_risco_fronteira': 15, 'sensibilidade_fronteira': 7}
 
 
 
@@ -55,6 +56,9 @@ def _exigir(cond, msg):
 def _ativo(config, nome):
     # Graficos geometricos estao na fase 'teste_final' do YAML, MAS
     # sua origem e exclusivamente o desenvolvimento F1..F9.
+    # Experimentos antigos podem nao ter este novo grafico no YAML congelado.
+    if nome in ('sensibilidade_fronteira','densidades_marginais','regioes_dominancia') and nome not in config.get('visualizacao', {}).get('graficos', {}):
+        return False
     return vis._ativado(config, nome, fase='teste_final')
 
 
@@ -120,7 +124,7 @@ def _treinar_vencedor(df, config, escolha):
     imp = ImputadorPadronizador(config,encoder).fit(x_enc)
     x_pre = imp.transform(x_enc)
     del x, x_enc
-    t_red = perf_counter()
+    inicio_reducao = perf_counter()
     if cand['metodo'] == 'PCA':
         red = RedutorPCA(config,cand['reducao']).fit(x_pre)
         coord = red.transform(x_pre)
@@ -129,6 +133,7 @@ def _treinar_vencedor(df, config, escolha):
         coord = red.transform_treino()
     else:
         raise ValueError('Metodo de reducao desconhecido.')
+    tempo_reducao = perf_counter() - inicio_reducao
     y = df[config['dados']['coluna_alvo']].copy()
     _exigir(coord.index.equals(y.index), 'Desalinhamento entre coordenadas e labels.')
     amostra = selecionar_indices_gmm(y.to_numpy(),config,modo=cand['modo'],
@@ -140,7 +145,7 @@ def _treinar_vencedor(df, config, escolha):
     _exigir(np.isfinite(probs).all(), 'Probabilidades de desenvolvimento invalidas.')
     return {'coord':coord,'gamma':gamma,'rh':rh,'gmm':modelo,'redutor':red,
             'pre':x_pre,'y':y.to_numpy(dtype=np.int8), 'scores':probs.to_numpy(),
-            'tempo_reducao':t_red-t0,'tempo_total':perf_counter()-t0,
+            'tempo_reducao':tempo_reducao,'tempo_total':perf_counter()-t0,
             'n_treino_gmm':len(amostra),'limiar_oof':float(escolha['limiar_mcc_oof'])}
 
 
@@ -340,27 +345,483 @@ def _painel_parametros_gaussianos(config, data, dest, ext, dpi, csv):
         _salvar_dados(tabela,dest,'09_painel_parametros_gaussianos',True)
 
 
-def _scree(config,data,dest,ext,dpi,csv):
-    # Calculo diagnostico so no desenvolvimento. Nao modifica K vencedor.
-    x=data['pre'].to_numpy(dtype=np.float32,copy=False)
-    k=min(len(x),x.shape[1])
-    pca=PCA(n_components=k,svd_solver='full')
-    pca.fit(x)
-    ratio=np.asarray(pca.explained_variance_ratio_,dtype=float)
-    nsel=data['coord'].shape[1]
-    fig,ax=_fig(config)
-    xaxis=np.arange(1,len(ratio)+1)
-    opt=config['visualizacao']['graficos']['pca_cotovelo']
-    if opt.get('mostrar_variancia_individual',True):ax.plot(xaxis,ratio,'o-',label='Variancia individual')
-    if opt.get('mostrar_variancia_acumulada',True):ax.plot(xaxis,np.cumsum(ratio),'s-',label='Variancia acumulada')
-    if opt.get('destacar_componentes_selecionados',True):ax.axvline(nsel,color='black',ls='--',label=f'PCA vencedor = {nsel}')
-    ax.set(xlabel='Numero de componentes',ylabel='Proporcao variancia',ylim=(0,1.02))
-    ax.set_title('11 — Scree PCA | ajuste diagnostico no desenvolvimento')
-    ax.legend();_guardar(fig,dest,'11_pca_cotovelo',ext,dpi)
-    _salvar_dados(pd.DataFrame({'componente':xaxis,'variancia_individual':ratio,
-                               'variancia_acumulada':np.cumsum(ratio)}),
-                  dest,'11_pca_cotovelo',csv)
+def _scree(config, data, dest, ext, dpi, csv, *, origem='desenvolvimento'):
+    """PCA 11 (PDF): barras individuais + curva acumulada em eixos distintos.
 
+    PCA diagnostico sobre desenvolvimento pre-processado. O vencedor NAO muda;
+    o grafico exibe o espectro completo, mesmo quando o vencedor tem PC1 so.
+    """
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+    from matplotlib.ticker import PercentFormatter
+
+    x = data['pre'].to_numpy(dtype=np.float32, copy=False)
+    n_disponiveis = min(len(x), x.shape[1])
+    _exigir(n_disponiveis >= 1, 'PCA diagnostico sem componentes.')
+    pca = PCA(n_components=n_disponiveis, svd_solver='full').fit(x)
+    ratio = np.asarray(pca.explained_variance_ratio_, dtype=float)
+    absoluto = np.asarray(pca.explained_variance_, dtype=float)
+    acumulada = np.cumsum(ratio)
+    _exigir(np.isfinite(ratio).all() and (ratio >= 0).all(),
+            'Variancia explicada PCA invalida.')
+    nsel = int(data['coord'].shape[1])
+    _exigir(1 <= nsel <= len(ratio), 'Numero de PCs vencedor invalido.')
+    op = config['visualizacao']['graficos']['pca_cotovelo']
+    nums = np.arange(1, len(ratio)+1)
+    fig, ax = plt.subplots(figsize=(12.0, 7.0))
+    ax_acum = ax.twinx()
+    barras = op.get('mostrar_variancia_individual', True)
+    linha = op.get('mostrar_variancia_acumulada', True)
+    if barras:
+        ax.bar(nums, ratio, width=.74, color='#83bb79', alpha=.82,
+               edgecolor='#5c9a55', linewidth=.45, zorder=2)
+    if linha:
+        ax_acum.plot(nums, acumulada, color='#d92e2e', linewidth=2.2,
+                     marker='o', markersize=3.0, zorder=5)
+        for alvo in op.get('linhas_referencia_acumulada', [0.80, 0.90, 0.95]):
+            valor = float(alvo)
+            _exigir(np.isfinite(valor) and 0 < valor <= 1,
+                    'Referencia de variancia acumulada invalida.')
+            ax_acum.axhline(valor, color='#64748b', linestyle=':',
+                            linewidth=.85, alpha=.55, zorder=1)
+            ax_acum.text(.995, valor, f'{valor:.0%}',
+                         transform=ax_acum.get_yaxis_transform(),
+                         ha='right', va='bottom', fontsize=7.8,
+                         color='#69788b')
+        for j in op.get('marcar_acumulados', [1, 2, 3]):
+            k = int(j)
+            if 1 <= k <= len(acumulada):
+                ax_acum.scatter([k], [acumulada[k-1]], s=30, zorder=7,
+                                facecolor='#d92e2e', edgecolor='white', linewidth=.5)
+    if op.get('destacar_componentes_selecionados', True):
+        ax.axvline(nsel, color='#101820', linewidth=1.65,
+                   linestyle='--', alpha=.85, zorder=6)
+    ax.set(xlabel='Componente principal', ylabel='Variância individual (%)')
+    ax_acum.set_ylabel('Variância acumulada (%)', color='#c62828')
+    ax.yaxis.set_major_formatter(PercentFormatter(1.0))
+    ax_acum.yaxis.set_major_formatter(PercentFormatter(1.0))
+    ax.set_ylim(0, max(.03, min(1.0, float(max(ratio))*1.18)))
+    ax_acum.set_ylim(0, 1.045)
+    ax.set_xlim(.35, len(ratio)+.7)
+    if len(ratio) <= 15:
+        xt = nums
+    else:
+        passo = 5 if len(ratio) <= 65 else 10
+        xt = sorted(set([1, 2, 3, len(ratio)] + list(range(5, len(ratio)+1, passo))))
+    ax.set_xticks(xt)
+    ax.grid(axis='y', linestyle=':', color='#9ca3af', alpha=.22)
+
+    # Numeros C(1), C(2), C(3) sempre identificados explicitamente e SEM
+    # sobreposicao, inclusive quando existem dezenas de componentes.
+    marcacoes = ',  '.join(f'C({j}) = {acumulada[j-1]:.1%}'
+                           for j in (1, 2, 3) if j <= len(acumulada))
+    fig.suptitle('11 — Variância explicada / Scree plot | PCA diagnóstico',
+                 fontsize=16, weight='bold', y=.978)
+    fig.text(.5, .927, marcacoes + f'    |    PCA vencedor: {nsel} PC(s)',
+             ha='center', fontsize=10.5, color='#26364a', weight='medium')
+    legenda = []
+    if barras:
+        legenda.append(Patch(facecolor='#83bb79', label='Variância individual'))
+    if linha:
+        legenda.append(Line2D([0], [0], color='#d92e2e', lw=2.2,
+                              marker='o', label='Variância acumulada'))
+    if op.get('destacar_componentes_selecionados', True):
+        legenda.append(Line2D([0], [0], color='#101820', lw=1.65,
+                              ls='--', label=f'PCA selecionado: {nsel}'))
+    fig.legend(handles=legenda, ncol=3, loc='upper center',
+               bbox_to_anchor=(.5, .905), fontsize=9.4, frameon=False)
+    _exigir(origem in ('desenvolvimento', 'simulado'),
+            'Origem do Scree PCA desconhecida.')
+    nota = ('PRÉVIA SINTÉTICA: dados simulados; sem métricas OOF reais.'
+            if origem == 'simulado' else
+            'Espectro diagnóstico calculado apenas no desenvolvimento F1–F9.')
+    fig.text(.5, .035,
+             nota + ' Variância explicada não mede separação de fraudes; F10 não utilizado.',
+             ha='center', fontsize=8.7, color='#506079')
+    fig.subplots_adjust(left=.085, right=.90, top=.82, bottom=.15)
+    _guardar(fig, dest, '11_pca_cotovelo', ext, dpi)
+    _salvar_dados(pd.DataFrame({'componente': nums,
+        'variancia_individual': ratio,
+        'variancia_acumulada': acumulada,
+        'variancia_absoluta': absoluto}), dest, '11_pca_cotovelo', csv)
+
+
+
+def _pca_histograma_1d(config, data, dest, ext, dpi, csv, op, *, origem='desenvolvimento'):
+    """PCA 12 (PDF): PC1 como histograma, nunca como eixo Y artificial.
+
+    Usa as coordenadas do PCA VENCEDOR ajustado somente em F1–F9.
+    Distribuicoes condicionais a cada grupo sao normalizadas para permitir
+    a comparacao visual mesmo em dados fortemente desbalanceados.
+    """
+    from scipy.ndimage import gaussian_filter1d
+    from matplotlib.colors import Normalize
+    from matplotlib.cm import ScalarMappable
+    _exigir(origem in ('desenvolvimento', 'simulado'), 'Origem da projecao PCA invalida.')
+
+    scores_pca = data['coord'].to_numpy(dtype=float)
+    _exigir(scores_pca.ndim == 2 and scores_pca.shape[1] == 1,
+            'Histograma PCA 1D requer somente PC1.')
+    x = scores_pca[:, 0]
+    y = np.asarray(data['y']).ravel()
+    _exigir(len(x) == len(y) and np.isfinite(x).all(),
+            'Dados invalidos na projecao PC1.')
+    pca = data['redutor'].modelo_
+    ratio = np.asarray(pca.explained_variance_ratio_, dtype=float)
+    _exigir(len(ratio) == 1 and np.isfinite(ratio[0]),
+            'Variancia explicada do PCA vencedor indisponivel.')
+    n_bins = int(op.get('bins_histograma_1d', 36))
+    _exigir(5 <= n_bins <= 200, 'Quantidade de bins do PCA 1D invalida.')
+    lo, hi = float(np.min(x)), float(np.max(x))
+    if hi <= lo:
+        margem = max(abs(lo) * .05, .5)
+        lo -= margem
+        hi += margem
+    edges = np.linspace(lo, hi, n_bins + 1)
+    mids = .5 * (edges[1:] + edges[:-1])
+    width = float(edges[1] - edges[0])
+    fig, ax = _fig(config)
+    colorir = op.get('colorir_por', 'classe_real')
+    classes = config['visualizacao']['classes']
+    rotulos = None
+    if colorir in ('classe_real', 'classe_predita'):
+        valores = (y if colorir == 'classe_real' else
+                   (np.asarray(data['scores']) >= float(data['limiar_oof'])).astype(int))
+        rotulos = [(0, classes['legitima'].get('nome', 'Legitima'),
+                    classes['legitima'].get('cor', '#438fc9')),
+                   (1, classes['fraude'].get('nome', 'Fraude'),
+                    classes['fraude'].get('cor', '#d43d3d'))]
+        for grupo, nome, cor in rotulos:
+            subset = x[valores == grupo]
+            if not len(subset):
+                continue
+            valores_hist, _ = np.histogram(subset, bins=edges, density=True)
+            ax.bar(mids, valores_hist, width=width * .93, color=cor,
+                   alpha=.38, edgecolor=cor, linewidth=.45,
+                   label=f'{nome} (n={len(subset):,})', zorder=2)
+            if op.get('curvas_suavizadas_1d', True) and len(subset) >= 3:
+                curva = gaussian_filter1d(valores_hist, sigma=1.15, mode='nearest')
+                ax.plot(mids, curva, color=cor, linewidth=1.9, zorder=4)
+        legenda = 'Classes observadas' if colorir == 'classe_real' else 'Classes previstas (limiar OOF)'
+        ax.set_ylabel('Densidade por grupo (área = 1)')
+        nota = ('Histogramas normalizados por grupo; alturas não representam a prevalência. '
+                + legenda + '. Desenvolvimento F1–F9; F10 não utilizado.')
+    elif colorir == 'gaussiana_dominante':
+        grupos = np.argmax(data['gamma'].to_numpy(), axis=1)
+        _exigir(len(grupos) == len(x), 'Responsabilidades GMM nao alinhadas ao PCA.')
+        for k in np.unique(grupos):
+            subset = x[grupos == k]
+            valores_hist, _ = np.histogram(subset, bins=edges, density=True)
+            cor = plt.get_cmap('tab20')(int(k) % 20)
+            ax.bar(mids, valores_hist, width=width * .93,
+                   color=cor, alpha=.23, label=f'G{k+1} (n={len(subset):,})')
+            if op.get('curvas_suavizadas_1d', True) and len(subset) >= 3:
+                ax.plot(mids, gaussian_filter1d(valores_hist, sigma=1.15, mode='nearest'),
+                        color=cor, linewidth=1.5)
+        ax.set_ylabel('Densidade por gaussiana (área = 1)')
+        nota = ('Grupos por argmax de responsabilidade; não são classes de fraude. '
+                'Desenvolvimento F1–F9; F10 não utilizado.')
+    elif colorir == 'risco':
+        riscos = np.asarray(data['scores'], dtype=float)
+        _exigir(len(riscos) == len(x) and np.isfinite(riscos).all() and
+                ((riscos >= 0) & (riscos <= 1)).all(),
+                'Riscos invalidos na projeção PCA.')
+        contagem, _ = np.histogram(x, bins=edges)
+        soma, _ = np.histogram(x, bins=edges, weights=riscos)
+        medios = np.divide(soma, contagem, out=np.zeros(n_bins), where=contagem > 0)
+        cor = plt.get_cmap('viridis')
+        norma = Normalize(vmin=0, vmax=1)
+        ax.bar(mids, contagem, width=width * .93,
+               color=cor(norma(medios)), edgecolor='white', linewidth=.2)
+        fig.colorbar(ScalarMappable(norm=norma, cmap=cor), ax=ax,
+                     label='Risco médio estimado por faixa PC1')
+        ax.set_ylabel('Frequência (observações)')
+        nota = ('Cor = risco médio por intervalo PC1; não representa classificação. '
+                'Desenvolvimento F1–F9; F10 não utilizado.')
+    else:
+        raise ValueError('Projecao PCA 1D: colorir_por desconhecido.')
+
+    if op.get('marcar_media_pc1_1d', True):
+        media = float(x.mean())
+        if abs(media) < 1e-10:
+            media = 0.0  # Arredondamento numerico do PCA centrado.
+        ax.axvline(media, color='#253247', linestyle='--', linewidth=1.25,
+                   label=f'Média global PC1 = {media:.3f}')
+    ax.set_xlabel(f'PC1 (variância explicada: {ratio[0]:.1%})')
+    ax.set_title('12 — PCA 1D | Histograma da projeção em PC1')
+    ax.grid(axis='y', alpha=.16, linestyle=':')
+    ax.legend(loc='best', fontsize=8)
+    fig.subplots_adjust(bottom=.24, top=.87)
+    if origem == 'simulado':
+        nota = 'PRÉVIA SINTÉTICA: dados simulados. ' + nota
+    fig.text(.5, .055, nota, ha='center', fontsize=8, color='#4a5568')
+    nome = '12_pca_projecao_PC1'
+    _guardar(fig, dest, nome, ext, dpi)
+    if csv:
+        _salvar_dados(pd.DataFrame({
+            'PC1': x,
+            'classe_real': y,
+            'risco_estimado_treino': np.asarray(data['scores'], dtype=float),
+            'gaussiana_dominante': np.argmax(data['gamma'].to_numpy(), axis=1) + 1,
+            'variancia_explicada_PC1': np.full(len(x), float(ratio[0])),
+        }), dest, nome, True)
+
+
+def _pca_projecao_2d3d(config, data, dest, ext, dpi, csv, op, *, origem='desenvolvimento'):
+    """PCA 12 do catálogo: 2 componentes = dispersão 2D, 3 = dispersão 3D.
+
+    Componentes e percentuais são do MESMO PCA ajustado nos dados de
+    desenvolvimento (ou numa simulação sintética de teste); nunca se
+    acrescentam eixos artificiais a um PCA de menor dimensão.
+    """
+    _exigir(origem in ('desenvolvimento', 'simulado'), 'Origem do PCA desconhecida.')
+    coords = data['coord']
+    z = coords.to_numpy(dtype=float)
+    d = z.shape[1]
+    _exigir(d in (2, 3), 'Projeção PCA multivariada exige 2 ou 3 PCs.')
+    _exigir(list(coords.columns) == [f'PC{i+1}' for i in range(d)],
+            'Colunas PCA devem ser PC1, PC2 e PC3, na ordem.')
+    pca = data['redutor'].modelo_
+    ratios = np.asarray(pca.explained_variance_ratio_, dtype=float)
+    _exigir(getattr(pca, 'n_components_', None) == d and ratios.shape == (d,),
+            'Dimensão dos scores diverge do PCA realmente ajustado.')
+    _exigir(np.isfinite(z).all() and np.isfinite(ratios).all(),
+            'Scores ou variância PCA não finitos.')
+    y = np.asarray(data['y']).ravel()
+    _exigir(len(z) == len(y) and np.isin(y, [0, 1]).all(),
+            'Observações e classes PCA desalinhadas.')
+    limite = int(config['visualizacao']['geometria'].get('pontos_maximos_amostra', 20000))
+    idx = _amostra_plot(len(y), y, config, limite)
+    modo = op.get('colorir_por', 'classe_real')
+    _exigir(modo in ('classe_real', 'classe_predita', 'risco', 'gaussiana_dominante'),
+            'Modo de coloração PCA desconhecido.')
+    legendas = config['visualizacao']['classes']
+    if d == 2:
+        fig, ax = _fig(config)
+    else:
+        fig = plt.figure(figsize=(11.5, 7.2))
+        ax = fig.add_subplot(111, projection='3d')
+    def desenhar(indices, *, cor, marcador, titulo, alpha=.55, tamanho=12):
+        if not len(indices):
+            return
+        kw = dict(s=tamanho, c=[cor], marker=marcador, alpha=alpha,
+                  label=titulo, rasterized=True)
+        if d == 2:
+            ax.scatter(z[indices, 0], z[indices, 1], **kw)
+        else:
+            ax.scatter(z[indices, 0], z[indices, 1], z[indices, 2], **kw)
+    if modo in ('classe_real', 'classe_predita'):
+        classes = (y if modo == 'classe_real' else
+                   (np.asarray(data['scores']) >= float(data['limiar_oof'])).astype(int))
+        for grupo, key in ((0, 'legitima'), (1, 'fraude')):
+            estilo = legendas[key]
+            indices = idx[classes[idx] == grupo]
+            desenhar(indices, cor=estilo.get('cor', '#438fc9'),
+                     marcador=estilo.get('marcador', 'o'),
+                     titulo=f"{estilo.get('nome', key)} (n={len(indices):,} exibidas)",
+                     alpha=float(estilo.get('alpha', .55)),
+                     tamanho=float(estilo.get('tamanho', 12)))
+        descricao = ('Classes reais (sobreposição descritiva; PCA não supervisionado)'
+                     if modo == 'classe_real' else
+                     'Classes previstas pelo limiar OOF; PCA não supervisionado')
+    elif modo == 'risco':
+        r = np.asarray(data['scores'], dtype=float).ravel()
+        _exigir(len(r) == len(y) and np.isfinite(r).all() and
+                ((r >= 0) & (r <= 1)).all(), 'Riscos PCA inválidos.')
+        kw = dict(c=r[idx], cmap='viridis', vmin=0, vmax=1,
+                  s=13, alpha=.7, rasterized=True)
+        if d == 2:
+            scatter = ax.scatter(z[idx, 0], z[idx, 1], **kw)
+        else:
+            scatter = ax.scatter(z[idx, 0], z[idx, 1], z[idx, 2], **kw)
+        fig.colorbar(scatter, ax=ax, shrink=.65 if d == 3 else 1,
+                     pad=.12 if d == 3 else .02, label='Risco estimado')
+        descricao = 'Cor = risco estimado; não é fronteira fraude/não fraude'
+    else:
+        grupos = np.argmax(data['gamma'].to_numpy(), axis=1)
+        _exigir(len(grupos) == len(y), 'Gaussianas e projeções não alinhadas.')
+        for k in np.unique(grupos[idx]):
+            indices = idx[grupos[idx] == k]
+            desenhar(indices, cor=plt.get_cmap('tab20')(int(k) % 20),
+                     marcador='o', titulo=f'G{int(k)+1} (n={len(indices):,} exibidas)',
+                     alpha=.52, tamanho=11)
+        descricao = 'Dominância por responsabilidade GMM; não é classe de fraude'
+    # Preserva os contornos opcionais do PCA 2D sem atribuir cobertura 95%.
+    if d == 2 and op.get('mostrar_contornos_gaussianas', False):
+        gm = data['gmm']
+        for k in range(len(gm.saidas_)):
+            cov = _covariancia(gm, k)[:2, :2]
+            eig, V = np.linalg.eigh(cov)
+            if (eig > 0).all():
+                theta = np.degrees(np.arctan2(V[1, 1], V[0, 1]))
+                ax.add_patch(Ellipse(gm.modelo_.means_[k, :2],
+                             width=4*np.sqrt(eig[1]), height=4*np.sqrt(eig[0]),
+                             angle=theta, facecolor='none',
+                             edgecolor=plt.get_cmap('tab10')(k % 10), alpha=.48))
+    ax.set_xlabel(f'PC1 (variância: {ratios[0]:.1%})', labelpad=9)
+    ax.set_ylabel(f'PC2 (variância: {ratios[1]:.1%})', labelpad=9)
+    if d == 3:
+        ax.set_zlabel(f'PC3 (variância: {ratios[2]:.1%})', labelpad=9)
+        ax.view_init(elev=22, azim=-64)
+        ax.set_box_aspect((1, 1, .85))
+    else:
+        ax.grid(alpha=.15, linestyle=':')
+    total = sum(float(v) for v in ratios)
+    titulo = f'12 — PCA {d}D | Projeção PC1 × PC2' + (' × PC3' if d == 3 else '')
+    ax.set_title(titulo + f' | variância acumulada: {total:.1%}', pad=15)
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        ax.legend(loc='best' if d == 2 else 'upper left', fontsize=8)
+    nota = f'{descricao}. Desenvolvimento F1–F9; F10 não utilizado.'
+    if d == 3 and op.get('mostrar_contornos_gaussianas', False):
+        nota += ' Elipsoides GMM não exibidos neste painel PCA.'
+    if len(idx) < len(y):
+        nota += f' Exibição amostrada: {len(idx):,} de {len(y):,} pontos; CSV completo.'
+    if origem == 'simulado':
+        nota = 'PRÉVIA SINTÉTICA: PCA ajustado em dados simulados. ' + nota
+    fig.text(.5, .035, nota, ha='center', fontsize=7.3, color='#46566a')
+    if d == 2:
+        fig.subplots_adjust(top=.88, bottom=.18)
+    else:
+        fig.subplots_adjust(left=.04, right=.94, bottom=.12, top=.9)
+    nome = '12_pca_projecao_PC1_PC2' + ('_PC3' if d == 3 else '')
+    _guardar(fig, dest, nome, ext, dpi)
+    if csv:
+        # Salvar TODAS as observações, mesmo quando a imagem usa amostragem.
+        campos = {f'PC{i+1}': z[:, i] for i in range(d)}
+        campos.update({
+            'classe_real': y,
+            'risco_estimado_treino': np.asarray(data['scores'], dtype=float),
+            'gaussiana_dominante': np.argmax(data['gamma'].to_numpy(), axis=1) + 1,
+            'exibido_na_imagem': np.isin(np.arange(len(y)), idx),
+        })
+        campos.update({f'variancia_explicada_PC{i+1}': np.full(len(y), float(ratios[i]))
+                       for i in range(d)})
+        _salvar_dados(pd.DataFrame(campos), dest, nome, True)
+
+def _tsne_histograma_1d(config, data, dest, ext, dpi, csv, op, *, origem='desenvolvimento'):
+    """Grafico 13 PDF: embedding t-SNE 1D em histograma, sem eixo Y ficticio.
+
+    Coordenadas vindas do t-SNE ja ajustado no desenvolvimento. Os rotulos
+    entram SOMENTE na coloracao/descricao, nunca no ajuste do embedding.
+    O histograma usa todos os pontos; o CSV preserva todas as linhas.
+    """
+    from scipy.ndimage import gaussian_filter1d
+    from matplotlib.colors import Normalize
+    from matplotlib.cm import ScalarMappable
+
+    _exigir(origem in ('desenvolvimento', 'simulado'),
+            'Origem do embedding t-SNE desconhecida.')
+    coord = data['coord']
+    z = coord.to_numpy(dtype=float)
+    redutor = data['redutor']
+    parametros = getattr(redutor, 'parametros', None)
+    _exigir(isinstance(parametros, dict) and int(parametros.get('n_components', 0)) == 1,
+            'Histograma t-SNE 1D exige redutor ajustado para 1 dimensao.')
+    _exigir(z.ndim == 2 and z.shape[1] == 1 and list(coord.columns) == ['TSNE1'],
+            'Scores t-SNE devem conter apenas TSNE1.')
+    y = np.asarray(data['y']).ravel()
+    _exigir(len(z) == len(y) and len(y) >= 2 and np.isfinite(z).all() and
+            np.isin(y, [0, 1]).all(), 'Classes e coordenadas t-SNE invalidas.')
+    x = z[:, 0]
+    risco = np.asarray(data['scores'], dtype=float).ravel()
+    _exigir(len(risco) == len(y) and np.isfinite(risco).all() and
+            np.all((risco >= 0) & (risco <= 1)), 'Riscos desalinhados ao t-SNE.')
+    grupos = np.argmax(data['gamma'].to_numpy(), axis=1)
+    _exigir(len(grupos) == len(x), 'Gaussianas desalinhadas ao t-SNE.')
+    n_bins = int(op.get('bins_histograma_1d', 36))
+    _exigir(5 <= n_bins <= 200, 'Bins t-SNE 1D fora de 5..200.')
+    lo, hi = float(x.min()), float(x.max())
+    if hi <= lo:
+        folga = max(0.5, abs(lo) * .05)
+        lo, hi = lo - folga, hi + folga
+    edges = np.linspace(lo, hi, n_bins + 1)
+    centros = .5 * (edges[:-1] + edges[1:])
+    largura = float(edges[1] - edges[0])
+    fig, ax = _fig(config)
+    colorir = op.get('colorir_por', 'classe_real')
+    estilos = config['visualizacao']['classes']
+    if colorir in ('classe_real', 'classe_predita'):
+        if colorir == 'classe_predita':
+            limiar = float(data['limiar_oof'])
+            _exigir(np.isfinite(limiar) and 0 <= limiar <= 1,
+                    'Limiar OOF invalido no embedding t-SNE.')
+            categorias = (risco >= limiar).astype(int)
+        else:
+            categorias = y
+        for classe, chave in ((0, 'legitima'), (1, 'fraude')):
+            subset = x[categorias == classe]
+            if not len(subset):
+                continue
+            e = estilos[chave]
+            cor = e.get('cor', '#438fc9' if classe == 0 else '#d43d3d')
+            dens, _ = np.histogram(subset, bins=edges, density=True)
+            ax.bar(centros, dens, width=largura * .94, color=cor,
+                   alpha=.38, edgecolor=cor, linewidth=.4,
+                   label=f"{e.get('nome', chave)} (n={len(subset):,})", zorder=2)
+            if len(subset) >= 3 and op.get('curvas_suavizadas_1d', True):
+                ax.plot(centros, gaussian_filter1d(dens, 1.15, mode='nearest'),
+                        color=cor, linewidth=1.8, zorder=4)
+        ax.set_ylabel('Densidade por grupo (área = 1)')
+        significado = ('Classes observadas, apenas sobrepostas ao t-SNE não supervisionado'
+                       if colorir == 'classe_real' else
+                       'Classes previstas por limiar MCC OOF; não são rótulos do ajuste t-SNE')
+        nota = 'Densidades normalizadas por grupo; alturas não são prevalência. ' + significado
+    elif colorir == 'gaussiana_dominante':
+        for k in np.unique(grupos):
+            subset = x[grupos == k]
+            dens, _ = np.histogram(subset, bins=edges, density=True)
+            cor = plt.get_cmap('tab20')(int(k) % 20)
+            ax.bar(centros, dens, width=largura * .94,
+                   color=cor, alpha=.26, label=f'G{k+1} (n={len(subset):,})')
+            if len(subset) >= 3 and op.get('curvas_suavizadas_1d', True):
+                ax.plot(centros, gaussian_filter1d(dens, 1.15, mode='nearest'),
+                        color=cor, linewidth=1.6)
+        ax.set_ylabel('Densidade por componente (área = 1)')
+        nota = ('Grupos por maior responsabilidade GMM, não classes de fraude. '
+                'Densidades normalizadas por componente.')
+    elif colorir == 'risco':
+        contagem, _ = np.histogram(x, bins=edges)
+        somas, _ = np.histogram(x, bins=edges, weights=risco)
+        medias = np.divide(somas, contagem, out=np.zeros(n_bins), where=contagem > 0)
+        cmap = plt.get_cmap('viridis')
+        norm = Normalize(vmin=0, vmax=1)
+        ax.bar(centros, contagem, width=largura * .94,
+               color=cmap(norm(medias)), edgecolor='white', linewidth=.3)
+        fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=ax,
+                     label='Risco médio estimado por faixa t-SNE 1')
+        ax.set_ylabel('Frequência (observações)')
+        nota = ('Cor indica risco médio por intervalo do embedding; '
+                'não é fronteira de classificação.')
+    else:
+        raise ValueError('t-SNE 13: colorir_por invalido.')
+
+    ax.set_xlabel('t-SNE 1 (coordenada do embedding; sem variância explicada)')
+    ax.set_title('13 — t-SNE 1D | Histograma do embedding')
+    ax.grid(axis='y', alpha=.18, linestyle=':')
+    if colorir != 'risco':
+        ax.legend(loc='best', fontsize=8)
+    p = parametros
+    subtitulo = (f"Configuração: perplexity={p.get('perplexity', 'n/d')} | "
+                 f"metric={p.get('metric', 'n/d')} | 1 dimensão")
+    fig.text(.5, .925, subtitulo, ha='center', fontsize=9, color='#374151')
+    rodape = ('Leitura local: distâncias globais não devem ser superinterpretadas. '
+              + nota + ' Desenvolvimento F1–F9; F10 não utilizado.')
+    if origem == 'simulado':
+        rodape = 'PRÉVIA SINTÉTICA: t-SNE ajustado em dados simulados. ' + rodape
+    # Texto dividido em duas linhas para caber em resoluções menores.
+    fig.text(.5, .05, rodape, ha='center', va='center', fontsize=7.3,
+             color='#526077', wrap=True)
+    fig.subplots_adjust(top=.87, bottom=.19)
+    nome = '13_tsne_mapa_TSNE1'
+    _guardar(fig, dest, nome, ext, dpi)
+    if csv:
+        _salvar_dados(pd.DataFrame({
+            'TSNE1': x, 'classe_real': y,
+            'classe_predita_limiar_oof': (risco >= float(data['limiar_oof'])).astype(int),
+            'risco_estimado_desenvolvimento': risco,
+            'gaussiana_dominante': grupos + 1,
+        }), dest, nome, True)
 
 def _projecoes(config,data,dest,ext,dpi,csv,metodo):
     coord=data['coord'].to_numpy(); y=data['y'];names=list(data['coord'].columns)
@@ -371,6 +832,19 @@ def _projecoes(config,data,dest,ext,dpi,csv,metodo):
     colorir=op.get('colorir_por','classe_real')
     _exigir(colorir in ('classe_real','classe_predita','risco','gaussiana_dominante'),
             'Projecao: colorir_por desconhecido.')
+    if metodo == 'TSNE' and coord.shape[1] == 1:
+        _tsne_histograma_1d(config, data, dest, ext, dpi, csv, op)
+        return
+    if metodo == 'TSNE' and coord.shape[1] == 3:
+        from src import visualizacao_tsne_pdf as tsne_pdf
+        tsne_pdf.projecao_3d(config, data, dest, ext, dpi, csv, op)
+        return
+    if metodo == 'PCA' and coord.shape[1] == 1:
+        _pca_histograma_1d(config, data, dest, ext, dpi, csv, op)
+        return
+    if metodo == 'PCA' and coord.shape[1] in (2, 3):
+        _pca_projecao_2d3d(config, data, dest, ext, dpi, csv, op)
+        return
     for par in _pares(coord.shape[1],config):
         fig,ax=_fig(config)
         if colorir=='classe_real':
@@ -425,19 +899,14 @@ def _projecoes(config,data,dest,ext,dpi,csv,metodo):
             **{names[i]:coord[idx,i] for i in par}}),dest,nome,csv)
 
 
-def _tsne_diagnostico(config,data,dest,ext,dpi,csv):
-    red=data['redutor']
-    kl=getattr(red,'kl_divergence_',None)
-    fig,ax=_fig(config)
-    ax.axis('off')
-    detalhes=["14 — Diagnostico t-SNE (desenvolvimento)",
-              f"Divergencia KL final: {kl if kl is not None else 'indisponivel'}",
-              f"Tempo ajuste/reducao: {data['tempo_reducao']:.1f} s",
-              'Historico por iteracao: nao fornecido pelo openTSNE utilizado']
-    ax.text(.08,.8,'\n'.join(detalhes),transform=ax.transAxes,va='top',fontsize=12)
-    _guardar(fig,dest,'14_tsne_diagnostico',ext,dpi)
-    _salvar_dados(pd.DataFrame([{'kl_final':kl,'tempo_reducao_s':data['tempo_reducao'],
-                                'historico_disponivel':False}]),dest,'14_tsne_diagnostico',csv)
+def _tsne_diagnostico(config, data, dest, ext, dpi, csv):
+    from src import visualizacao_tsne_pdf as tsne_pdf
+    return tsne_pdf.diagnostico_kl(config, data, dest, ext, dpi, csv)
+
+
+def _tsne_trustworthiness(config, data, dest, ext, dpi, csv):
+    from src import visualizacao_tsne_pdf as tsne_pdf
+    return tsne_pdf.trustworthiness_perplexity(config, data, dest, ext, dpi, csv)
 
 
 def _pontuar_gmm_array(gmm,rh,arr):
@@ -905,7 +1374,7 @@ def executar(experimento, *, raiz=None, somente_planejar=False):
     manifest=json.loads((experimento/'manifesto.json').read_text(encoding='utf-8-sig'))
     _exigir(manifest.get('status')=='concluido_06_03', 'Execucao OOF ainda nao concluida.')
     _exigir(escolha.get('teste_final_usado') is False,'Nao e permitido usar F10 na selecao.')
-    ativos=[n for n in TIPOS if _ativo(cfg,n) and (n not in ('pca_cotovelo','pca_projecoes','tsne_mapa','tsne_diagnostico')
+    ativos=[n for n in TIPOS if _ativo(cfg,n) and (n not in ('pca_cotovelo','pca_projecoes','tsne_trustworthiness','tsne_mapa','tsne_diagnostico')
              or ('pca_' in n and escolha['configuracao']['metodo']=='PCA')
              or ('tsne_' in n and escolha['configuracao']['metodo']=='TSNE'))]
     print('PASSO 07.02 — GEOMETRIA DO VENCEDOR')
@@ -926,10 +1395,18 @@ def executar(experimento, *, raiz=None, somente_planejar=False):
     destino=experimento/cfg['saidas']['pastas']['teste_final']/cfg['saidas']['pastas']['graficos']
     destino.mkdir(parents=True,exist_ok=True)
     ext,dpi,csv=_estilo(cfg)
+    from src import visualizacao_gmm07 as sensibilidade
+    from src import visualizacao_gmm01 as marginais
+    from src import visualizacao_gmm04 as dominancia
     funcoes={
+        'densidades_marginais':lambda:marginais.gerar(cfg,data,destino,ext,dpi,csv),
+        'regioes_dominancia':lambda:dominancia.gerar(cfg,data,destino,ext,dpi,csv),
         'painel_parametros_gaussianos':lambda:_painel_parametros_gaussianos(cfg,data,destino,ext,dpi,csv),
+        'sensibilidade_fronteira':lambda:sensibilidade.gerar(cfg,data,escolha,destino,ext,dpi,csv,
+                          avaliacao={'y':y_av_oof,'p':p_av_oof,'origem':'oof'}),
         'pca_cotovelo':lambda:_scree(cfg,data,destino,ext,dpi,csv),
         'pca_projecoes':lambda:_projecoes(cfg,data,destino,ext,dpi,csv,'PCA'),
+        'tsne_trustworthiness':lambda:_tsne_trustworthiness(cfg,data,destino,ext,dpi,csv),
         'tsne_mapa':lambda:_projecoes(cfg,data,destino,ext,dpi,csv,'TSNE'),
         'tsne_diagnostico':lambda:_tsne_diagnostico(cfg,data,destino,ext,dpi,csv),
         'mapa_risco_fronteira':lambda:_fronteira(cfg,data,escolha,destino,ext,dpi,csv,

@@ -33,12 +33,16 @@ from src import visualizacao_oof as oof
 FORMATS = ('.png', '.pdf', '.svg')
 NOMES_GEO = dict(geo.NUM)
 GEO_PREFIXOS = {
+    'densidades_marginais': 'GMM01_densidade_marginal_',
+    'regioes_dominancia': 'GMM04_dominancia_',
     'painel_parametros_gaussianos': '09_painel_parametros_gaussianos',
     'pca_cotovelo': '11_pca_cotovelo',
     'pca_projecoes': '12_pca_projecao_',
+    'tsne_trustworthiness': 'TSNE02_trustworthiness_vs_perplexity',
     'tsne_mapa': '13_tsne_mapa_',
     'tsne_diagnostico': '14_tsne_diagnostico',
     'mapa_risco_fronteira': 'GMM08_mapa_risco_',
+    'sensibilidade_fronteira': 'GMM07_sensibilidade_',
 }
 
 
@@ -221,7 +225,7 @@ def _verificar_geracoes(experimento,config,escolha,*,executar):
     _exigir(ext in FORMATS,'Extensao de grafico desconhecida.')
     oof_ativos=[nome for nome in oof.ARQUIVOS if oof._ativado(config,nome)]
     esperado_geo=[nome for nome in geo.TIPOS if geo._ativo(config,nome) and
-        (nome not in ('pca_cotovelo','pca_projecoes','tsne_mapa','tsne_diagnostico')
+        (nome not in ('pca_cotovelo','pca_projecoes','tsne_trustworthiness','tsne_mapa','tsne_diagnostico')
          or (nome.startswith('pca_') and escolha['configuracao']['metodo']=='PCA')
          or (nome.startswith('tsne_') and escolha['configuracao']['metodo']=='TSNE'))]
     fonte_oof=oof_dir/'manifesto_graficos_oof_07_01.json'
@@ -236,7 +240,14 @@ def _verificar_geracoes(experimento,config,escolha,*,executar):
                   else all((geo_dir/f'GMM08_mapa_risco_{int(escolha["configuracao"]["reducao"]["n_components"])}d_{corte}{ext}').is_file()
                            for corte in ('fixo','mcc')))
                 if n=='mapa_risco_fronteira'
-                else any(geo_dir.glob(f'{GEO_PREFIXOS[n]}*{ext}'))
+                else ((geo_dir/f'GMM07_sensibilidade_{int(escolha["configuracao"]["reducao"]["n_components"])}d_comparativo{ext}').is_file()
+                      if n=='sensibilidade_fronteira'
+                      else (len(list(geo_dir.glob(f'GMM01_densidade_marginal_{int(escolha["configuracao"]["reducao"]["n_components"])}d_*{ext}')))
+                            == int(escolha['configuracao']['reducao']['n_components'])
+                            if n=='densidades_marginais'
+                            else (geo_dir/f'GMM04_dominancia_{int(escolha["configuracao"]["reducao"]["n_components"])}d{ext}').is_file()
+                            if n=='regioes_dominancia'
+                            else any(geo_dir.glob(f'{GEO_PREFIXOS[n]}*{ext}'))))
             ) for n in esperado_geo)
         return imagens_oof,imagens_geo
 
@@ -319,7 +330,7 @@ def _html_galeria(experimento,arquivos,escolha,complemento,metodo,tipo):
     blocos=[]
     for secao,titulo,aviso in (
         ('oof','00–06 — Painel e validacao OOF','Predicoes fora do treino; somente o grafico 06 compara os candidatos.'),
-        ('geometria_desenvolvimento','GMM 08/09 e diagnosticos PCA/t-SNE do vencedor','Modelo reajustado em F1–F9. Esta pasta NAO contem medidas do F10.'),
+        ('geometria_desenvolvimento','GMM 01/07/08/09 e diagnosticos PCA/t-SNE do vencedor','Modelo reajustado em F1–F9. Esta pasta NAO contem medidas do F10.'),
         ('complementar_2d','16 — Diagnostico 2D complementar','Outro candidato da grade OOF; NAO representa a fronteira do vencedor.')
     ):
         fotos=[(p,n) for p,n in arquivos if p.parts[0]==secao]
@@ -391,12 +402,22 @@ def integrar(experimento, *, planejar=False, complementar_2d=True):
             else:
                 # Ignorar imagens legadas 07/08/09-heatmap/10 ainda no disco.
                 permitido=any(arq.stem.startswith(GEO_PREFIXOS[n]) for n in ativos_geo
-                              if n != 'mapa_risco_fronteira')
+                              if n not in ('mapa_risco_fronteira','sensibilidade_fronteira','densidades_marginais'))
+                if 'regioes_dominancia' in ativos_geo:
+                    dim=int(escolha['configuracao']['reducao']['n_components'])
+                    permitido=permitido and (not arq.stem.startswith('GMM04_dominancia_') or
+                        arq.stem==f'GMM04_dominancia_{dim}d')
                 if 'mapa_risco_fronteira' in ativos_geo:
                     dim=int(escolha['configuracao']['reducao']['n_components'])
                     mapas={'GMM08_mapa_risco_1d_comparativo'} if dim==1 else {
                         f'GMM08_mapa_risco_{dim}d_fixo',f'GMM08_mapa_risco_{dim}d_mcc'}
                     permitido=permitido or arq.stem in mapas
+                if 'sensibilidade_fronteira' in ativos_geo:
+                    dim=int(escolha['configuracao']['reducao']['n_components'])
+                    permitido=permitido or arq.stem==f'GMM07_sensibilidade_{dim}d_comparativo'
+                if 'densidades_marginais' in ativos_geo:
+                    dim=int(escolha['configuracao']['reducao']['n_components'])
+                    permitido=permitido or arq.stem.startswith(f'GMM01_densidade_marginal_{dim}d_')
             if permitido:
                 relativo=Path(secao)/arq.name
                 _arquivo_seguro_copiar(arq,base/relativo)

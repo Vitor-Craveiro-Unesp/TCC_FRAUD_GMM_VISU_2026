@@ -103,7 +103,10 @@ def test_respeita_pares_geometricos_de_2d_e_3d(sint,tmp_path,monkeypatch):
     assert len(list(tmp_path.glob('GMM08_mapa_risco_*.png')))==2
     assert len(list(tmp_path.glob('GMM08_malha_*.csv')))==3
     m._projecoes(c,data,tmp_path,'png',60,True,'PCA')
-    assert len(list(tmp_path.glob('12_pca_projecao_*.png')))==3
+    # PDF PCA 12: 3 PCs selecionados => UMA projeção 3D verdadeira.
+    # Os três pares continuam obrigatórios para os cortes do GMM 08.
+    assert len(list(tmp_path.glob('12_pca_projecao_*.png')))==1
+    assert (tmp_path/'12_pca_projecao_PC1_PC2_PC3.png').exists()
 
 
 def test_covar_full_em_1d(sint):
@@ -141,7 +144,7 @@ def test_planejar_nao_reajusta_ou_le_parquet(cfg, sint, tmp_path, monkeypatch):
     monkeypatch.setattr(m,'_treinar_vencedor',lambda *a: pytest.fail('Nao pode treinar no planejamento'))
     r=m.executar(exp,raiz=tmp_path,somente_planejar=True)
     assert r['planejamento'] is True
-    assert len(r['graficos'])==4
+    assert len(r['graficos'])==7
     assert 'tsne_mapa' not in r['graficos']
 
 
