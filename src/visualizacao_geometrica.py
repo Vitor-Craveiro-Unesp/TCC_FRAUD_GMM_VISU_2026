@@ -38,13 +38,13 @@ from src.probabilidade import PreditorProbabilisticoGMM
 # Numeracao explicita: os graficos avulsos 07, 08 e 10 foram substituidos
 # pelo painel GMM 09, conforme o catalogo. Nao renumerar PCA/t-SNE.
 TIPOS = (
-    'painel_parametros_gaussianos', 'pca_cotovelo', 'pca_projecoes',
+    'painel_parametros_gaussianos', 'pca_cotovelo', 'pca_projecoes', 'pca_biplot',
     'tsne_trustworthiness', 'tsne_mapa', 'tsne_diagnostico', 'mapa_risco_fronteira',
     'sensibilidade_fronteira', 'densidades_marginais', 'regioes_dominancia',
 )
 NUM = {'densidades_marginais': 1, 'regioes_dominancia': 4, 'painel_parametros_gaussianos': 9, 'pca_cotovelo': 11,
        'pca_projecoes': 12, 'tsne_trustworthiness': 2, 'tsne_mapa': 13, 'tsne_diagnostico': 14,
-       'mapa_risco_fronteira': 15, 'sensibilidade_fronteira': 7}
+       'mapa_risco_fronteira': 8, 'sensibilidade_fronteira': 7}
 
 
 
@@ -1113,12 +1113,11 @@ def _fronteira_1d_comparativa(config, data, gm, op, plano, idx, tau_star,
 
 
 def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
-    """GMM08 PDF: mapas fixo e MCC com geometria FULL e mudancas hachuradas.
+    """GMM08: 1D comparativo, 2D (1x2) e 3D (3x2), sem alterar o GMM.
 
-    A malha e o campo de score sao identicos nos dois arquivos gerados.
-    Somente a fronteira e a regiao hachurada dependem do corte.
+    Ambos os limiares partilham malha, campo de risco, escala e seções FULL
+    das gaussianas de 95%. Só fronteira/hachura dependem do corte.
     """
-    from scipy.stats import norm
     op = config['visualizacao']['graficos']['mapa_risco_fronteira']
     X = data['coord'].to_numpy(dtype=float)
     y = np.asarray(data['y'], dtype=np.uint8)
@@ -1192,146 +1191,109 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
         nome_mcc = 'MCC (origem não identificada)'
         nota_mcc = 'Origem da avaliação não informada; não afirmar que é OOF'
 
-    for tipo, tau, mcc in [('fixo', .5, mcc_fixo), ('mcc', tau_star, mcc_otimo)]:
-        if len(par_list) == 1:
-            fig, axs = plt.subplots(1, 1, figsize=(10.8, 7.3))
-        elif X.shape[1] == 3:
-            fig, axs = plt.subplots(1, len(par_list), figsize=(18.8, 7.2))
-        else:
-            fig, axs = plt.subplots(1, len(par_list), figsize=(6*len(par_list), 6.2))
-        axes = np.ravel(np.asarray(axs, dtype=object))
-        for ax, (par, grade, campo, fixo, otimo, mudou) in zip(axes, planos):
-            if len(par) == 1:
-                x = grade[0]
-                ax.plot(x, campo, color='#2361a1', lw=2.4, label='Risco conjunto do GMM')
-                for classe,nome,cor in ((0,'Legítimas','#4389c2'),(1,'Fraudes','#e58d31')):
-                    ii = idx[y[idx] == classe]
-                    if len(ii): ax.scatter(X[ii,par[0]], data['scores'][ii],
-                       color=cor, s=7, alpha=.18, label=nome, rasterized=True)
-                if op.get('mostrar_gaussianas', True):
-                    for k in range(len(gm.saidas_)):
-                        media = float(gm.modelo_.means_[k, par[0]])
-                        sigma = np.sqrt(_covariancia(gm,k)[par[0],par[0]])
-                        r = norm.ppf(.975) * sigma
-                        cor = plt.get_cmap('tab10')(k % 10)
-                        ax.axvspan(media-r, media+r, facecolor=cor, alpha=.06)
-                        ax.axvline(media-r, color=cor, lw=1, ls='--', alpha=.7)
-                        ax.axvline(media+r, color=cor, lw=1, ls='--', alpha=.7)
-                        ax.axvline(media, color=cor, lw=1, ls=':', alpha=.8)
-                # Destacar intervalos contiguos de mudanca na curva 1D.
-                if tipo == 'mcc' and mudou.any():
-                    limites = np.flatnonzero(np.diff(np.r_[False, mudou, False]))
-                    for start, end in limites.reshape(-1,2):
-                        ax.axvspan(x[start], x[min(end,len(x)-1)],
-                                   facecolor='#f3c747', alpha=.25, hatch='////',
-                                   edgecolor='#b38904', lw=.3)
-                if campo.min() < tau < campo.max():
-                    # Em 1D, a FRONTEIRA sao as coordenadas x em que s(x)=tau.
-                    inds = np.flatnonzero((campo[:-1]-tau)*(campo[1:]-tau) <= 0)
-                    for pos in inds:
-                        y1, y2 = campo[pos], campo[pos+1]
-                        x0 = x[pos] if y1 == y2 else x[pos]+(tau-y1)*(x[pos+1]-x[pos])/(y2-y1)
-                        ax.axvline(x0, color='black', lw=1.8, ls='-',
-                                   label=f'Fronteira s(x)={tau:.6g}' if pos==inds[0] else None)
-                    ax.axhline(tau, color='black', ls=':', lw=1, alpha=.55)
-                else:
-                    ax.text(.02,.96, f'Sem fronteira: score não cruza τ={tau:.6g} neste intervalo',
-                            transform=ax.transAxes, va='top', fontsize=9)
-                ax.set(xlabel=nomes[par[0]], ylabel='Probabilidade estimada de fraude',
-                       ylim=(0, teto_1d), xlim=(x[0],x[-1]))
-                ax.legend(fontsize=8,loc='upper right')
+    # Uma figura comparativa por dimensionalidade, com linhas = cortes do
+    # espaco 3D e colunas = limiares fixo / otimo. Mesmo campo em ambas.
+    dim = X.shape[1]
+    fig_size = (17.2, 17.8) if dim == 3 else (16.0, 7.8)
+    fig, axes = plt.subplots(len(planos), 2, figsize=fig_size,
+                             sharex='row', sharey='row', squeeze=False)
+    fig.patch.set_facecolor('white')
+    cortes = (('fixo', .5, mcc_fixo), ('mcc', tau_star, mcc_otimo))
+    for linha, (par, grade, campo, fixo, otimo, mudou) in enumerate(planos):
+        xx, yy = grade
+        for coluna, (tipo, tau, mcc) in enumerate(cortes):
+            ax = axes[linha, coluna]
+            quad = ax.pcolormesh(xx, yy, campo, cmap='viridis',
+                                 shading='auto', vmin=0, vmax=maior)
+            _scatter(ax, X, y, idx, config, par)
+            if op.get('mostrar_gaussianas', True):
+                for k in range(len(gm.saidas_)):
+                    geo = _elipse_95_corte(gm, k, par, fixos)
+                    if geo is None:
+                        continue
+                    centro, largura, altura, angulo = geo
+                    cor = plt.get_cmap('tab10')(k % 10)
+                    ax.add_patch(Ellipse(centro, largura, altura, angle=angulo,
+                                         ec=cor, fc='none', ls='--', lw=1.6))
+                    ax.plot(centro[0], centro[1], marker='x',
+                            color=cor, ms=7, mew=2)
+            # A mudanca e XOR(score>=.50, score>=tau_star): mostrar apenas
+            # na coluna MCC; nao alterar scores nem probabilidades.
+            if tipo == 'mcc' and mudou.any():
+                h = ax.contourf(xx, yy, mudou.astype(float), levels=[.5, 1.5],
+                                colors='none', hatches=['////'])
+                h.set_edgecolor('#ffd247')
+                h.set_linewidth(.1)
+            if campo.min() < tau < campo.max():
+                ax.contour(xx, yy, campo, levels=[tau], colors='black',
+                           linewidths=2)
             else:
-                xx, yy = grade
-                quad = ax.pcolormesh(xx,yy,campo,cmap='viridis',shading='auto',vmin=0,vmax=maior)
-                _scatter(ax, X, y, idx, config, par)
-                if op.get('mostrar_gaussianas', True):
-                    for k in range(len(gm.saidas_)):
-                        geo = _elipse_95_corte(gm,k,par,fixos)
-                        if geo is None: continue
-                        centro,largura,altura,angulo = geo
-                        cor = plt.get_cmap('tab10')(k % 10)
-                        ax.add_patch(Ellipse(centro,largura,altura,angle=angulo,
-                                           ec=cor,fc='none',ls='--',lw=1.6))
-                        ax.plot(centro[0],centro[1],marker='x',color=cor,ms=7,mew=2)
-                if tipo == 'mcc' and mudou.any():
-                    h = ax.contourf(xx,yy,mudou.astype(float), levels=[.5,1.5],
-                                    colors='none',hatches=['////'])
-                    h.set_edgecolor('#ffd247')
-                    h.set_linewidth(.1)
-                if campo.min() < tau < campo.max():
-                    ax.contour(xx,yy,campo,levels=[tau],colors='black',linewidths=2)
-                else:
-                    ax.text(.02,.03, f'Sem contorno s(x)={tau:.5g} neste plano',
-                            transform=ax.transAxes,color='white',fontsize=8,
-                            bbox={'facecolor':'#152233','alpha':.8,'edgecolor':'none'})
-                ax.set(xlabel=nomes[par[0]],ylabel=nomes[par[1]],
-                       xlim=(xx[0,0],xx[0,-1]),ylim=(yy[0,0],yy[-1,0]))
-                if X.shape[1] == 3:
-                    omitida = next(k for k in range(3) if k not in par)
-                    ax.set_title(
-                        f'Corte {nomes[par[0]]} × {nomes[par[1]]}\n'
-                        f'{nomes[omitida]} fixada na média do desenvolvimento = {fixos[omitida]:.3g}',
-                        fontsize=9.5, pad=10)
-                else:
-                    ax.set_title(f'Corte {nomes[par[0]]} × {nomes[par[1]]}',fontsize=10)
-        if X.shape[1] > 1:
-            # No 3D, reservar margem DIREITA incluindo ticklabels e rótulo.
-            cax = (fig.add_axes([.888,.23,.012,.54]) if X.shape[1] == 3
-                   else fig.add_axes([.925,.21,.012,.57]))
-            fig.colorbar(quad, cax=cax,
-                         label='Probabilidade estimada de fraude (mesma escala)')
-        nome_corte = 'Fixo 0,50' if tipo == 'fixo' else 'Ótimo MCC OOF'
-        if X.shape[1] == 3 and origem_mcc != 'oof':
-            nome_corte = 'Fixo 0,50' if tipo == 'fixo' else 'Ótimo MCC — ' + (
-                'simulação' if origem_mcc == 'simulado' else 'avaliação sem origem')
-        fig.suptitle(f'GMM 08 — Mapa de risco e geometria 95% | {nome_corte} | '
-                     f'{gm.modelo_.covariance_type.upper()} | {X.shape[1]}D',
-                     fontsize=15,fontweight='bold',y=.984)
-        direcao=('Legítima → fraude' if tau_star < .5 else
-                 'Fraude → legítima' if tau_star > .5 else 'Nenhuma mudança')
-        if X.shape[1] == 3:
-            # Mesmas cores tab10 do Painel GMM 09, para TODOS os componentes.
-            from matplotlib.lines import Line2D
-            from matplotlib.patches import Patch
-            legenda = [
-                Line2D([0],[0],color='black',lw=2,label='Fronteira da decisão'),
-                Patch(facecolor='none',edgecolor='#d6a915',hatch='////',
-                      label='Mudança entre os cortes'),
-                Line2D([0],[0],ls='',marker='o',color='#4389c2',
-                       label='Legítimas — projeção dos pontos'),
-                Line2D([0],[0],ls='',marker='*',color='#d62728',
-                       label='Fraudes — projeção dos pontos'),
-            ]
-            if op.get('mostrar_gaussianas',True):
-                legenda.extend(Line2D([0],[0],color=plt.get_cmap('tab10')(k%10),
-                          ls='--',lw=1.8,label=f'{nome} — seção 95%')
-                          for k,nome in enumerate(gm.saidas_))
-            fig.legend(handles=legenda,loc='upper center',
-                       bbox_to_anchor=(.48,.928),ncol=min(6,len(legenda)),
-                       frameon=False,fontsize=8.5,columnspacing=1.1,
-                       handlelength=2.4)
-            fig.text(.49,.095,
-                     f'{nome_mcc}(τ={tau:.6g}) = {mcc:.5f}   |   '
-                     f'Hachura amarela: mudança de classe ({direcao})',
-                     fontsize=9.7,ha='center',color='#23334a',weight='bold')
-            fig.text(.49,.063,
-                     f'{nota_mcc}. Pontos = projeções das observações; os campos são cortes '
-                     'com a terceira dimensão fixada na média de F1–F9.',
-                     fontsize=8.5,ha='center',color='#4a5970')
-            fig.text(.49,.037,
-                     'Curvas tracejadas = seções dos elipsoides FULL de 95%, '
-                     'não regiões classificadas como fraude. F10 não utilizado.',
-                     fontsize=8.3,ha='center',color='#4a5970')
-            fig.subplots_adjust(left=.06,right=.855,top=.765,bottom=.18,wspace=.30)
-        else:
-            fig.text(.5,.035,
-                     f'MCC OOF(τ={tau:.6g})={mcc:.5f}  |  '
-                     f'Hachura amarela: mudança entre cortes ({direcao}); '
-                     'gaussianas 95% ≠ regiões de fraude. Modelo geométrico: desenvolvimento F1–F9.',
-                     fontsize=9,ha='center',color='#23334a')
-            fig.subplots_adjust(left=.075,right=.895,top=.87,bottom=.16,wspace=.38)
-        stem=f'GMM08_mapa_risco_{X.shape[1]}d_{tipo}'
-        _guardar(fig,dest,stem,ext,dpi)
+                ax.text(.02, .03, f'Sem contorno s(x)={tau:.5g} neste plano',
+                        transform=ax.transAxes, color='white', fontsize=8,
+                        bbox={'facecolor':'#152233','alpha':.8,'edgecolor':'none'})
+            ax.set(xlabel=nomes[par[0]], ylabel=nomes[par[1]],
+                   xlim=(xx[0, 0], xx[0, -1]),
+                   ylim=(yy[0, 0], yy[-1, 0]))
+            if dim == 3:
+                omitida = next(k for k in range(3) if k not in par)
+                ax.set_title(
+                    f'Corte {nomes[par[0]]} × {nomes[par[1]]}\n'
+                    f'{nomes[omitida]} fixada na média do desenvolvimento = '
+                    f'{fixos[omitida]:.3g}', fontsize=9.5, pad=10)
+            else:
+                ax.set_title(f'Corte {nomes[par[0]]} × {nomes[par[1]]}',
+                             fontsize=10)
+    # Barra única e mesma escala de risco em todos os 2 ou 6 painéis.
+    cax = fig.add_axes([.91, .26 if dim == 3 else .25, .012,
+                        .47 if dim == 3 else .48])
+    fig.colorbar(quad, cax=cax,
+                 label='Probabilidade estimada de fraude (mesma escala)')
+
+    fig.suptitle(f'GMM 08 — Mapa de risco e geometria 95% | '
+                 f'{gm.modelo_.covariance_type.upper()} | {dim}D',
+                 fontsize=16, fontweight='bold', y=.984)
+    # Titulos das colunas identificam a ORIGEM correta dos MCCs.
+    fig.text(.265, .937, f'Limiar fixo τ=0,50  |  {nome_mcc}={mcc_fixo:.5f}',
+             ha='center', fontsize=12, weight='bold', color='#23334a')
+    fig.text(.685, .937, f'Limiar ótimo τ*={tau_star:.6g}  |  '
+             f'{nome_mcc}={mcc_otimo:.5f}',
+             ha='center', fontsize=12, weight='bold', color='#23334a')
+
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+    legenda = [
+        Line2D([0], [0], color='black', lw=2, label='Fronteira de decisão'),
+        Patch(facecolor='none', edgecolor='#d6a915', hatch='////',
+              label='Mudança entre os cortes (coluna MCC)'),
+        Line2D([0], [0], ls='', marker='o', color='#4389c2',
+               label='Legítimas — pontos projetados'),
+        Line2D([0], [0], ls='', marker='*', color='#d62728',
+               label='Fraudes — pontos projetados'),
+    ]
+    if op.get('mostrar_gaussianas', True):
+        legenda.extend(Line2D([0], [0],
+                       color=plt.get_cmap('tab10')(k % 10), ls='--', lw=1.8,
+                       label=f'{nome} — seção 95%')
+                       for k, nome in enumerate(gm.saidas_))
+    fig.legend(handles=legenda, loc='upper center',
+               bbox_to_anchor=(.49, .897), ncol=min(6, len(legenda)),
+               frameon=False, fontsize=8.4, columnspacing=1.1)
+
+    direcao = ('Legítima → fraude' if tau_star < .5 else
+               'Fraude → legítima' if tau_star > .5 else 'Nenhuma mudança')
+    fig.text(.49, .075, f'Hachura amarela: mudança de classe ({direcao}); '
+             'mesma superfície de risco nos dois limiares.',
+             fontsize=9.4, ha='center', color='#23334a', weight='bold')
+    fig.text(.49, .050, f'{nota_mcc}. '
+             + ('Os planos 3D fixam a coordenada omitida na média de F1–F9.'
+                if dim == 3 else 'Visualização do desenvolvimento F1–F9.'),
+             fontsize=8.5, ha='center', color='#4a5970')
+    fig.text(.49, .027, 'Elipses tracejadas: seções de gaussianas FULL 95%, '
+             'não regiões classificadas como fraude. F10 não utilizado.',
+             fontsize=8.2, ha='center', color='#4a5970')
+    fig.subplots_adjust(left=.07, right=.875, top=.82, bottom=.145,
+                        wspace=.23, hspace=.45 if dim == 3 else .27)
+    _guardar(fig, dest, f'GMM08_mapa_risco_{dim}d_comparativo', ext, dpi)
 
 
 
@@ -1374,7 +1336,7 @@ def executar(experimento, *, raiz=None, somente_planejar=False):
     manifest=json.loads((experimento/'manifesto.json').read_text(encoding='utf-8-sig'))
     _exigir(manifest.get('status')=='concluido_06_03', 'Execucao OOF ainda nao concluida.')
     _exigir(escolha.get('teste_final_usado') is False,'Nao e permitido usar F10 na selecao.')
-    ativos=[n for n in TIPOS if _ativo(cfg,n) and (n not in ('pca_cotovelo','pca_projecoes','tsne_trustworthiness','tsne_mapa','tsne_diagnostico')
+    ativos=[n for n in TIPOS if _ativo(cfg,n) and (n not in ('pca_cotovelo','pca_projecoes','pca_biplot','tsne_trustworthiness','tsne_mapa','tsne_diagnostico')
              or ('pca_' in n and escolha['configuracao']['metodo']=='PCA')
              or ('tsne_' in n and escolha['configuracao']['metodo']=='TSNE'))]
     print('PASSO 07.02 — GEOMETRIA DO VENCEDOR')
@@ -1398,6 +1360,7 @@ def executar(experimento, *, raiz=None, somente_planejar=False):
     from src import visualizacao_gmm07 as sensibilidade
     from src import visualizacao_gmm01 as marginais
     from src import visualizacao_gmm04 as dominancia
+    from src import visualizacao_pca_biplot as biplot
     funcoes={
         'densidades_marginais':lambda:marginais.gerar(cfg,data,destino,ext,dpi,csv),
         'regioes_dominancia':lambda:dominancia.gerar(cfg,data,destino,ext,dpi,csv),
@@ -1406,6 +1369,7 @@ def executar(experimento, *, raiz=None, somente_planejar=False):
                           avaliacao={'y':y_av_oof,'p':p_av_oof,'origem':'oof'}),
         'pca_cotovelo':lambda:_scree(cfg,data,destino,ext,dpi,csv),
         'pca_projecoes':lambda:_projecoes(cfg,data,destino,ext,dpi,csv,'PCA'),
+        'pca_biplot':lambda:biplot.gerar(cfg,data,destino,ext,dpi,csv),
         'tsne_trustworthiness':lambda:_tsne_trustworthiness(cfg,data,destino,ext,dpi,csv),
         'tsne_mapa':lambda:_projecoes(cfg,data,destino,ext,dpi,csv,'TSNE'),
         'tsne_diagnostico':lambda:_tsne_diagnostico(cfg,data,destino,ext,dpi,csv),

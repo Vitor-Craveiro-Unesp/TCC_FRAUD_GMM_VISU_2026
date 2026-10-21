@@ -38,6 +38,7 @@ GEO_PREFIXOS = {
     'painel_parametros_gaussianos': '09_painel_parametros_gaussianos',
     'pca_cotovelo': '11_pca_cotovelo',
     'pca_projecoes': '12_pca_projecao_',
+    'pca_biplot': 'PCA_BIPLOT_',  # Sem numeracao oficial ate auditoria.
     'tsne_trustworthiness': 'TSNE02_trustworthiness_vs_perplexity',
     'tsne_mapa': '13_tsne_mapa_',
     'tsne_diagnostico': '14_tsne_diagnostico',
@@ -225,7 +226,7 @@ def _verificar_geracoes(experimento,config,escolha,*,executar):
     _exigir(ext in FORMATS,'Extensao de grafico desconhecida.')
     oof_ativos=[nome for nome in oof.ARQUIVOS if oof._ativado(config,nome)]
     esperado_geo=[nome for nome in geo.TIPOS if geo._ativo(config,nome) and
-        (nome not in ('pca_cotovelo','pca_projecoes','tsne_trustworthiness','tsne_mapa','tsne_diagnostico')
+        (nome not in ('pca_cotovelo','pca_projecoes','pca_biplot','tsne_trustworthiness','tsne_mapa','tsne_diagnostico')
          or (nome.startswith('pca_') and escolha['configuracao']['metodo']=='PCA')
          or (nome.startswith('tsne_') and escolha['configuracao']['metodo']=='TSNE'))]
     fonte_oof=oof_dir/'manifesto_graficos_oof_07_01.json'
@@ -235,19 +236,18 @@ def _verificar_geracoes(experimento,config,escolha,*,executar):
         imagens_oof=all((oof_dir/(oof.ARQUIVOS[n]+ext)).is_file() for n in oof_ativos)
         imagens_geo=all(
             (
-                ((geo_dir/f'GMM08_mapa_risco_1d_comparativo{ext}').is_file()
-                  if int(escolha['configuracao']['reducao']['n_components'])==1
-                  else all((geo_dir/f'GMM08_mapa_risco_{int(escolha["configuracao"]["reducao"]["n_components"])}d_{corte}{ext}').is_file()
-                           for corte in ('fixo','mcc')))
+                (geo_dir/f'GMM08_mapa_risco_{int(escolha["configuracao"]["reducao"]["n_components"])}d_comparativo{ext}').is_file()
                 if n=='mapa_risco_fronteira'
-                else ((geo_dir/f'GMM07_sensibilidade_{int(escolha["configuracao"]["reducao"]["n_components"])}d_comparativo{ext}').is_file()
+                else ((geo_dir/f'PCA_BIPLOT_{int(escolha["configuracao"]["reducao"]["n_components"])}D{ext}').is_file()
+                      if n=='pca_biplot'
+                      else ((geo_dir/f'GMM07_sensibilidade_{int(escolha["configuracao"]["reducao"]["n_components"])}d_comparativo{ext}').is_file()
                       if n=='sensibilidade_fronteira'
                       else (len(list(geo_dir.glob(f'GMM01_densidade_marginal_{int(escolha["configuracao"]["reducao"]["n_components"])}d_*{ext}')))
                             == int(escolha['configuracao']['reducao']['n_components'])
                             if n=='densidades_marginais'
                             else (geo_dir/f'GMM04_dominancia_{int(escolha["configuracao"]["reducao"]["n_components"])}d{ext}').is_file()
                             if n=='regioes_dominancia'
-                            else any(geo_dir.glob(f'{GEO_PREFIXOS[n]}*{ext}'))))
+                            else any(geo_dir.glob(f'{GEO_PREFIXOS[n]}*{ext}')))))
             ) for n in esperado_geo)
         return imagens_oof,imagens_geo
 
@@ -403,14 +403,16 @@ def integrar(experimento, *, planejar=False, complementar_2d=True):
                 # Ignorar imagens legadas 07/08/09-heatmap/10 ainda no disco.
                 permitido=any(arq.stem.startswith(GEO_PREFIXOS[n]) for n in ativos_geo
                               if n not in ('mapa_risco_fronteira','sensibilidade_fronteira','densidades_marginais'))
+                if 'pca_biplot' in ativos_geo and arq.stem.startswith('PCA_BIPLOT_'):
+                    dim=int(escolha['configuracao']['reducao']['n_components'])
+                    permitido = permitido and arq.stem == f'PCA_BIPLOT_{dim}D'
                 if 'regioes_dominancia' in ativos_geo:
                     dim=int(escolha['configuracao']['reducao']['n_components'])
                     permitido=permitido and (not arq.stem.startswith('GMM04_dominancia_') or
                         arq.stem==f'GMM04_dominancia_{dim}d')
                 if 'mapa_risco_fronteira' in ativos_geo:
                     dim=int(escolha['configuracao']['reducao']['n_components'])
-                    mapas={'GMM08_mapa_risco_1d_comparativo'} if dim==1 else {
-                        f'GMM08_mapa_risco_{dim}d_fixo',f'GMM08_mapa_risco_{dim}d_mcc'}
+                    mapas={f'GMM08_mapa_risco_{dim}d_comparativo'}
                     permitido=permitido or arq.stem in mapas
                 if 'sensibilidade_fronteira' in ativos_geo:
                     dim=int(escolha['configuracao']['reducao']['n_components'])

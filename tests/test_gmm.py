@@ -183,7 +183,7 @@ def test_parametros_diagnosticos(config, dados):
     assert gmm.modelo_.converged_
     assert len(gmm.modelo_.weights_) == 2
     assert gmm.modelo_.means_.shape == (2, 2)
-    assert gmm.modelo_.covariances_.shape == (2, 2)
+    assert gmm.modelo_.covariances_.shape == (2, 2, 2)
     assert gmm.modelo_.n_iter_ >= 1
 
 

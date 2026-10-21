@@ -76,6 +76,40 @@ def test_quatro_tipos_pca_com_painel_salvos(sint,tmp_path):
     assert 'F10' in (tmp_path/'relatorio_gaussianas_desenvolvimento.md').read_text(encoding='utf-8')
 
 
+def test_mapa_gmm08_2d_comparativo_unico(sint, tmp_path, monkeypatch):
+    df, c, e = sint
+    d = copy.deepcopy(e)
+    d['configuracao']['reducao']['n_components'] = 2
+    data = m._treinar_vencedor(df, c, d)
+    capturas = []
+    original = m._guardar
+
+    def espiar(fig, destino, nome, ext, dpi):
+        if nome.startswith('GMM08_mapa_risco_'):
+            capturas.append({
+                'nome': nome,
+                'eixos': len(fig.axes),
+                'cabecalhos': [t.get_text() for t in fig.texts],
+                'escalas': [ax.collections[0].get_clim() for ax in fig.axes[:2]],
+            })
+        return original(fig, destino, nome, ext, dpi)
+
+    monkeypatch.setattr(m, '_guardar', espiar)
+    m._fronteira(c, data, d, tmp_path, 'png', 60, True,
+                avaliacao={'y':data['y'], 'p':data['scores'], 'origem':'simulado'})
+    assert len(capturas) == 1
+    assert capturas[0]['nome'] == 'GMM08_mapa_risco_2d_comparativo'
+    assert capturas[0]['eixos'] == 3  # 2 mapas + 1 barra compartilhada.
+    assert capturas[0]['escalas'][0] == capturas[0]['escalas'][1]
+    textos = ' '.join(capturas[0]['cabecalhos'])
+    assert '0,50' in textos and '0.12' in textos
+    assert 'MCC da simulação' in textos and 'F10 não utilizado' in textos
+    assert m.NUM['mapa_risco_fronteira'] == 8
+    assert (tmp_path/'GMM08_mapa_risco_2d_comparativo.png').is_file()
+    assert len(list(tmp_path.glob('GMM08_mapa_risco_*.png'))) == 1
+    assert len(list(tmp_path.glob('GMM08_malha_*.csv'))) == 1
+
+
 def test_respeita_pares_geometricos_de_2d_e_3d(sint,tmp_path,monkeypatch):
     df,c,e=sint
     d=copy.deepcopy(e)
@@ -84,23 +118,33 @@ def test_respeita_pares_geometricos_de_2d_e_3d(sint,tmp_path,monkeypatch):
     assert m._pares(3,c)==[(0,1),(0,2),(1,2)]
     capturas=[]
     salvar_original=m._guardar
+
     def espiar_figura(fig,dest,nome,ext,dpi):
         if nome.startswith('GMM08_mapa_risco_3d_'):
-            titulos=[ax.get_title() for ax in fig.axes[:3]]
+            titulos=[ax.get_title() for ax in fig.axes[:6]]
             legenda=[t.get_text() for l in fig.legends for t in l.get_texts()]
-            rodapes=[t.get_text() for t in fig.texts]
-            capturas.append((titulos,legenda,rodapes,fig.axes[-1].get_position().x1))
+            textos=[t.get_text() for t in fig.texts]
+            escalas=[ax.collections[0].get_clim() for ax in fig.axes[:6]]
+            capturas.append((nome,titulos,legenda,textos,escalas,
+                             fig.axes[-1].get_position().x1))
         return salvar_original(fig,dest,nome,ext,dpi)
+
     monkeypatch.setattr(m,'_guardar',espiar_figura)
     m._fronteira(c,data,d,tmp_path,'png',60,True,
-                avaliacao={"y":data["y"],"p":data["scores"],"origem":"simulado"})
-    assert len(capturas)==2
-    for titulos,legenda,rodapes,cbar_direita in capturas:
-        assert all('fixada na média do desenvolvimento' in titulo for titulo in titulos)
-        assert all(any(f'G{k} ' in titulo for titulo in legenda) for k in range(1,5))
-        assert any('MCC da simulação' in texto for texto in rodapes)
-        assert cbar_direita < .95
-    assert len(list(tmp_path.glob('GMM08_mapa_risco_*.png')))==2
+                avaliacao={'y':data['y'],'p':data['scores'],'origem':'simulado'})
+    assert len(capturas)==1
+    nome,titulos,legenda,textos,escalas,cbar_direita=capturas[0]
+    assert nome=='GMM08_mapa_risco_3d_comparativo'
+    assert len(titulos)==6
+    for i in (0,2,4):
+        assert titulos[i]==titulos[i+1]
+        assert 'fixada na média do desenvolvimento' in titulos[i]
+    assert len(set(escalas))==1
+    assert all(any(f'G{k} ' in titulo for titulo in legenda) for k in range(1,5))
+    assert sum('MCC da simulação' in t for t in textos)>=2
+    assert any('F10 não utilizado' in t for t in textos)
+    assert cbar_direita < .95
+    assert len(list(tmp_path.glob('GMM08_mapa_risco_*.png')))==1
     assert len(list(tmp_path.glob('GMM08_malha_*.csv')))==3
     m._projecoes(c,data,tmp_path,'png',60,True,'PCA')
     # PDF PCA 12: 3 PCs selecionados => UMA projeção 3D verdadeira.
@@ -144,7 +188,8 @@ def test_planejar_nao_reajusta_ou_le_parquet(cfg, sint, tmp_path, monkeypatch):
     monkeypatch.setattr(m,'_treinar_vencedor',lambda *a: pytest.fail('Nao pode treinar no planejamento'))
     r=m.executar(exp,raiz=tmp_path,somente_planejar=True)
     assert r['planejamento'] is True
-    assert len(r['graficos'])==7
+    assert len(r['graficos'])==8
+    assert 'pca_biplot' in r['graficos']
     assert 'tsne_mapa' not in r['graficos']
 
 

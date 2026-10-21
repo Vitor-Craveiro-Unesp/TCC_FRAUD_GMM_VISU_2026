@@ -352,12 +352,12 @@ visualizacao:
       tamanho: 42
       alpha: 0.90
 
-  # Regras de GEOMETRIA para PCA/t-SNE/GMM: desenhar apenas 1D e 2D.
-  # Quando o modelo tiver >=3 dimensoes, gerar pares 2D.
+  # Geometria PCA/t-SNE/GMM: respeitar as dimensoes do espaco usado (1D, 2D ou 3D).
+  # Em GMM 3D, mapas volumetricos sao representados por cortes 2D do campo conjunto.
+  # pares_2d define cortes/projecoes 2D, sem bloquear graficos em 3D.
   # Os indices comecam em 1 e devem existir no embedding do modelo.
   # Nao combinar coordenadas de folds diferentes em um unico scatter.
   geometria:
-    apenas_1d_2d: true
     pares_2d: [[1, 2], [1, 3], [2, 3]]  # NAO e grid.
     dimensoes_1d: [1]                     # NAO e grid.
     pontos_maximos_amostra: 20000          # Amostragem somente VISUAL.
@@ -564,6 +564,14 @@ visualizacao:
       # PCs diferentes aprendidas nos 9 folds.
 
     # --------------------------------------------------------
+    # BIPLOT PCA 1D/2D/3D — VISUAL (numeracao pendente dos catalogos).
+    # Sem novo ajuste PCA, sem alterar selecao, sem acesso ao F10.
+    pca_biplot:
+      habilitar: true
+      gerar_em: ["teste_final"]
+      somente_se_metodo: "PCA"
+      max_setas: 6  # Apenas exibicao; CSV preserva todas as variaveis.
+
     # 02 t-SNE — Preservacao local (somente diagnostico no desenvolvimento)
     # Sempre limitado por amostra: 6 ou mais fits podem ser custosos.
     # Nao muda o vencedor OOF nem o embedding t-SNE usado no GMM.
@@ -608,10 +616,11 @@ visualizacao:
 
     # --------------------------------------------------------
     # GMM 08 — MAPA DE RISCO, FRONTEIRA E GEOMETRIA 95% (PDF)
-    # Dois arquivos: corte 0.50 e corte MCC OOF, mesma malha/cores.
+    # UM arquivo comparativo por dimensao: 1D (1x2), 2D (1x2),
+    # 3D (3x2, linhas = planos, colunas = limiares).
     # A mascara mudou_classe e XOR dos dois cortes sobre mesmo score.
     # Nao se usa MCC calculado na malha; apenas nas predicoes OOF.
-    # Em 3D, cada arquivo contem os tres cortes 2D com demais eixos
+    # Em 3D, a imagem comparativa contem os tres cortes 2D com demais eixos
     # fixados na media do DESENVOLVIMENTO; elipsoides FULL 95%.
     # --------------------------------------------------------
     mapa_risco_fronteira:

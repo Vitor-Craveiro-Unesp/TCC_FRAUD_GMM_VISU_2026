@@ -197,3 +197,28 @@ def test_galeria_inclui_painel_00(monkeypatch,tmp_path,config,ranking):
     assert painel.read_bytes()==b'fake-png-painel'
     html=(root/'visualizacao_consolidada'/'index.html').read_text()
     assert '00_painel_score_composto.png' in html
+
+
+def test_galeria_gmm08_2d_aceita_comparativo_e_rejeita_arquivos_antigos(
+        tmp_path, config, ranking):
+    _, escolha = ranking
+    escolha = deepcopy(escolha)
+    escolha['configuracao']['reducao']['n_components'] = 2
+    for nome in m.oof.ARQUIVOS:
+        config['visualizacao']['graficos'][nome]['habilitar'] = False
+    for nome in geo.TIPOS:
+        config['visualizacao']['graficos'][nome]['habilitar'] = (
+            nome == 'mapa_risco_fronteira')
+    gd = tmp_path/'teste_final'/'graficos_gerados'
+    gd.mkdir(parents=True)
+    old1 = gd/'GMM08_mapa_risco_2d_fixo.png'
+    old2 = gd/'GMM08_mapa_risco_2d_mcc.png'
+    old1.write_bytes(b'legado-fixo')
+    old2.write_bytes(b'legado-mcc')
+    _, _, _, _, _, geo_pronto = m._verificar_geracoes(
+        tmp_path, config, escolha, executar=False)
+    assert not geo_pronto  # Os dois PNGs legados NÃO substituem o novo painel.
+    (gd/'GMM08_mapa_risco_2d_comparativo.png').write_bytes(b'novo-comparativo')
+    _, _, _, _, _, geo_pronto = m._verificar_geracoes(
+        tmp_path, config, escolha, executar=False)
+    assert geo_pronto
