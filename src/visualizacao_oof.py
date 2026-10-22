@@ -1137,14 +1137,17 @@ def _distribuicao(config,y,p,escolha,destino,ext,dpi,dados):
     tab, edges=_dados_distribuicao(y,p,limites,bins)
     n0=int(np.sum(y==0)); n1=int(np.sum(y==1))
 
-    # Um unico grafico principal, sem miniatura sobreposta.
-    fig=plt.figure(figsize=(12.0,7.4),facecolor='white')
-    ax=fig.add_axes([.085,.24,.875,.575])
-    fig.suptitle('05 — Distribuição das probabilidades de fraude | vencedor OOF',
-                 x=.5,y=.967,fontsize=15.5,weight='semibold')
-    subt=('Zoom automático por classe' if zoom else 'Escala completa de probabilidades')
-    fig.text(.085,.920,f'{subt}  ·  Frequências relativas dentro de cada classe',
-             fontsize=10.4,color='#53647c')
+    # Figura principal
+    fig = plt.figure(figsize=(12.0, 7.4), facecolor='white')
+    ax = fig.add_axes([.105, .205, .855, .625])
+
+    fig.suptitle(
+        'Distribuição das probabilidades de fraude',
+        x=.5,
+        y=.967,
+        fontsize=15,
+        color='#202c3a'
+    )
 
     # Estilos do exemplo do catalogo: legitima azul, fraude laranja.
     # Na sobreposicao, nenhuma classe e removida ou reponderada.
@@ -1157,8 +1160,8 @@ def _distribuicao(config,y,p,escolha,destino,ext,dpi,dados):
             pesos=(np.full(len(vals),1./n,dtype=float) if normalizar
                     else np.ones(len(vals),dtype=float))
             _,_,art=ax.hist(vals,bins=edges,weights=pesos,alpha=.55,
-                  color=cor,edgecolor='white',linewidth=.4,label=f'{nome} (n={n:,})')
-            handles.append(art[0]);labels.append(f'{nome} (n={n:,})')
+                  color=cor,edgecolor='white',linewidth=.4,label=f'{nome} (n={n})')
+            handles.append(art[0]);labels.append(f'{nome} (n={n})')
         else:
             _exigir(len(vals)>2 and np.std(vals)>0,
                     f'KDE requer variacao e mais de duas observacoes: {nome}')
@@ -1171,15 +1174,38 @@ def _distribuicao(config,y,p,escolha,destino,ext,dpi,dados):
                 dens=dens*(edges[1]-edges[0])
             else:
                 dens=dens*n*(edges[1]-edges[0])
-            linha,=ax.plot(xs,dens,color=cor,lw=2,label=f'{nome} (n={n:,})')
-            handles.append(linha);labels.append(f'{nome} (n={n:,})')
+            linha,=ax.plot(xs,dens,color=cor,lw=2,label=f'{nome} (n={n})')
+            handles.append(linha);labels.append(f'{nome} (n={n})')
 
-    if op.get('marcar_limiar_oof',True) and limites[0]<=tau<=limites[1]:
-        l=ax.axvline(tau,color='#cb2935',lw=2,ls='-',label=f'τ* MCC OOF = {tau:.6g}')
-        handles.append(l);labels.append(f'τ* MCC OOF = {tau:.6g}')
-    if op.get('marcar_limiar_05',True) and limites[0]<=.5<=limites[1]:
-        l=ax.axvline(.5,color='#242e41',lw=1.6,ls='--',label='Corte fixo = 0,50')
-        handles.append(l);labels.append('Corte fixo = 0,50')
+    if op.get('marcar_limiar_oof', True) and limites[0] <= tau <= limites[1]:
+        l = ax.axvline(
+            tau,
+            color='#cb2935',
+            lw=2,
+            ls='-',
+            label='Limiar ótimo do MCC (τ*)'
+        )
+        handles.append(l)
+        labels.append('Limiar ótimo do MCC (τ*)')
+
+
+
+
+    if op.get('marcar_limiar_05', True) and limites[0] <= .5 <= limites[1]:
+        l = ax.axvline(
+            .5,
+            color='#242e41',
+            lw=1.6,
+            ls='--',
+            label='Corte fixo (τ = 0.5000000)'
+        )
+        handles.append(l)
+        labels.append('Corte fixo (τ = 0.5000000)')
+
+
+
+
+
     ax.set_xlim(*limites)
     ax.set_yscale(escala)
     ax.set_xlabel('Score / probabilidade estimada de fraude',fontsize=11,labelpad=8)
@@ -1188,26 +1214,56 @@ def _distribuicao(config,y,p,escolha,destino,ext,dpi,dados):
     if tipo=='densidade':
         ylabel=('Frequência relativa aproximada por bin (KDE)' if normalizar
                 else 'Contagem aproximada por bin (KDE)')
-    ax.set_ylabel(ylabel,fontsize=10.8,labelpad=9)
-    ax.grid(config['visualizacao']['padrao'].get('grade',True),alpha=.17,axis='y')
+
+    ax.set_ylabel(ylabel, fontsize=10.8, labelpad=9)
+
+    from matplotlib.ticker import FuncFormatter
+
+    def formato_eixo(valor, _pos):
+        valor = 0.0 if abs(valor) < 0.00000005 else valor
+        return f'{valor:.7f}'
+
+    ax.xaxis.set_major_formatter(FuncFormatter(formato_eixo))
+    ax.yaxis.set_major_formatter(FuncFormatter(formato_eixo))
+
+    ax.tick_params(axis='both', labelsize=8.5)
+
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    ax.grid(
+        config['visualizacao']['padrao'].get('grade', True),
+        axis='y',
+        color='#d7dfe8',
+        linewidth=.75,
+        alpha=.65
+    )
+
     ax.set_axisbelow(True)
     if config['visualizacao']['padrao'].get('legenda',True):
         fig.legend(handles,labels,loc='upper center',bbox_to_anchor=(.5,.892),
                    ncol=min(4,len(labels)),frameon=False,fontsize=9.4)
 
-    frac0=int(tab['fora_do_zoom_legitima'].iloc[0])/n0 if n0 else 0.
-    frac1=int(tab['fora_do_zoom_fraude'].iloc[0])/n1 if n1 else 0.
-    fig.text(.085,.152,f'AP OOF = {average_precision_score(y,p):.5f}   |   '
-             f'Prevalência = {np.mean(y):.4%}   |   τ* MCC OOF = {tau:.6g}',
-             fontsize=10.6,color='#263b59',weight='semibold')
-    cortes=f'Corte fixo 0,50: '+('linha tracejada na figura' if .5<=limites[1] else 'fora da janela ampliada')
-    fig.text(.085,.110,cortes,fontsize=9.7,color='#4c5d72')
-    if zoom:
-        fig.text(.085,.073,f'Cauda fora do zoom: legítimas {frac0:.2%}  ·  fraudes {frac1:.2%}. '
-                 'Denominadores incluem toda a classe.',fontsize=9.2,color='#596779')
-    else:
-        fig.text(.085,.073,'Barras por classe, mesma amostra OOF F1–F9. F10 não utilizado.',
-                 fontsize=9.2,color='#596779')
+    # Resultados principais da validacao OOF
+    ap = float(average_precision_score(y, p))
+    prevalencia = float(np.mean(y))
+
+    fig.text(
+        .105, .105,
+        'Resultados da validação OOF',
+        fontsize=10.5,
+        weight='bold',
+        color='#26374d'
+    )
+
+    fig.text(
+        .105, .065,
+        f'AP = {ap:.7f}   |   '
+        f'Prevalência = {prevalencia:.7f}   |   '
+        f'τ* MCC = {tau:.7f}',
+        fontsize=9.7,
+        color='#26374d'
+    )
 
     _salvar(fig,_caminho_png(destino,'distribuicao_probabilidades',ext),dpi=dpi)
     if dados:
@@ -1226,46 +1282,172 @@ def _rotulo_config(linha):
     return rot
 
 
-def _comparacao(config,grade,escolha,destino,ext,dpi,dados):
-    op=_op(config,'comparacao_hiperparametros')
-    chave=op.get('ordenar_por','score')
-    validas={'ap','mcc','logloss','score'}
-    _exigir(chave in validas,'comparacao_hiperparametros.ordenar_por invalido.')
-    ordem_asc = chave == 'logloss'
-    grade=grade.sort_values([chave,'id_candidato'],ascending=[ordem_asc,True],kind='stable')
-    maximo=int(op.get('maximo_configuracoes',25))
-    _exigir(maximo>=1,'maximo_configuracoes deve ser positivo.')
-    limitado=grade.head(maximo).copy()
-    metricas=op.get('metricas',['ap','mcc','logloss','score'])
-    _exigir(bool(metricas) and all(m in validas for m in metricas), 'Métricas de comparação desconhecidas.')
-    # Uma imagem da categoria 06, com painéis separados para escalas distintas.
-    fig,axes=plt.subplots(len(metricas),1,figsize=(max(10, len(limitado)*.8+4),max(4,3.3*len(metricas))),
-                          squeeze=False)
-    labels=[_rotulo_config(r) for _,r in limitado.iterrows()]
-    x=np.arange(len(limitado))
-    for ax,m in zip(axes.flat,metricas):
-        vals=limitado[m].to_numpy(float)
-        barras=ax.bar(x,vals)
-        for barra,(_,r) in zip(barras,limitado.iterrows()):
-            if op.get('destacar_vencedor',True) and r['id_candidato']==escolha['id_candidato']:
-                barra.set_edgecolor('black');barra.set_linewidth(2.5);barra.set_hatch('///')
-        ax.set_ylabel(m.upper());ax.set_xticks(x,labels,rotation=30,ha='right',fontsize=8)
-        # baseline = 0 evita eixos manipulados visualmente
-        minimo=min(0,float(np.min(vals)))
-        maximo_v=max(0,float(np.max(vals)))
-        margem=max(.03*max(abs(maximo_v),abs(minimo)),.003)
-        ax.set_ylim(minimo-margem if minimo<0 else 0,maximo_v+margem)
-        ax.grid(axis='y',alpha=.2)
-        for barra,v in zip(barras,vals):
-            ax.annotate(f'{v:.5f}',xy=(barra.get_x()+barra.get_width()/2,barra.get_height()),
-                        xytext=(0,3),textcoords='offset points',ha='center',va='bottom',fontsize=8)
-    if config['visualizacao']['padrao'].get('titulo',True):
-        fig.suptitle('06 — Comparação OOF de hiperparâmetros (vencedor hachurado)',fontsize=12)
-    fig.tight_layout()
-    _salvar(fig,_caminho_png(destino,'comparacao_hiperparametros',ext),dpi=dpi)
+def _comparacao(config, grade, escolha, destino, ext, dpi, dados):
+    """Compara as configuracoes OOF sem alterar metricas ou selecionar outro modelo.
+
+    Candidatos ordenados pelo score composto e distribuidos em paginas.
+    Escalas horizontais iniciam em zero (salvo valores negativos) e sao
+    constantes entre as paginas de uma mesma metrica.
+    """
+    from matplotlib.ticker import FuncFormatter, MaxNLocator
+    from matplotlib.patches import Patch
+
+    op = _op(config, 'comparacao_hiperparametros')
+    validas = {'ap', 'mcc', 'logloss', 'score'}
+    metricas_config = list(op.get('metricas', ['ap', 'mcc', 'logloss', 'score']))
+    _exigir(
+        bool(metricas_config)
+        and len(set(metricas_config)) == len(metricas_config)
+        and set(metricas_config).issubset(validas),
+        'Metricas de comparacao desconhecidas ou repetidas.'
+    )
+    # O score aparece primeiro quando habilitado, pois foi o criterio de selecao.
+    metricas = (['score'] if 'score' in metricas_config else []) + [
+        m for m in metricas_config if m != 'score'
+    ]
+    _exigir(len(grade) > 0, 'Grade de candidatos vazia.')
+    _exigir(grade['id_candidato'].is_unique, 'IDs de candidatos repetidos.')
+
+    # Mesma regra de classificacao OOF: score, AP e ID em caso de empate.
+    ordenada = grade.sort_values(
+        ['score', 'ap', 'id_candidato'],
+        ascending=[False, False, True],
+        kind='stable'
+    ).reset_index(drop=True)
+    vencedor_id = str(escolha['id_candidato'])
+    _exigir(
+        str(ordenada.iloc[0]['id_candidato']) == vencedor_id,
+        'Candidato selecionado diverge da ordenacao pelo score composto.'
+    )
+
+    # O parametro historico funciona como teto por pagina: nenhum candidato
+    # e excluido da comparacao. O padrao e de ate oito por imagem.
+    maximo = int(op.get('maximo_configuracoes', 25))
+    _exigir(maximo >= 1, 'maximo_configuracoes deve ser positivo.')
+    por_pagina = int(op.get('configuracoes_por_pagina', min(maximo, 8)))
+    _exigir(1 <= por_pagina <= maximo, 'configuracoes_por_pagina invalido.')
+
+
+    titulos = {
+        'score': 'SCORE COMPOSTO',
+        'ap': 'AP (AVERAGE PRECISION)',
+        'mcc': 'MCC (MATTHEWS CORRELATION COEFFICIENT)',
+        'logloss': 'LOGLOSS',
+    }
+
+
+    
+    # Evitar zero negativo e preservar sete casas em todos os eixos.
+    formato = FuncFormatter(
+        lambda valor, _pos: f'{0.0 if abs(valor) < 0.00000005 else valor:.7f}'
+    )
+    cor_selecionado = '#245b89'
+    cor_demais = '#a5c1d9'
+
+    # Os limites sao calculados com a grade COMPLETA para permitir comparacao
+    # entre paginas sem mudanca artificial de escala.
+    escalas = {}
+    for metrica in metricas:
+        numeros = ordenada[metrica].to_numpy(dtype=float)
+        _exigir(np.isfinite(numeros).all(), f'Valores invalidos para {metrica}.')
+        menor = min(0.0, float(np.min(numeros)))
+        maior = max(0.0, float(np.max(numeros)))
+        amplitude = maior - menor
+        margem = max(0.07 * amplitude, 0.0000001)
+        escalas[metrica] = (
+            menor - margem if menor < 0.0 else 0.0,
+            maior + margem
+        )
+
+    total_paginas = (len(ordenada) + por_pagina - 1) // por_pagina
+    for pagina in range(total_paginas):
+        inicio = pagina * por_pagina
+        parte = ordenada.iloc[inicio:inicio + por_pagina]
+        posicoes = np.arange(len(parte))
+        rotulos = [_rotulo_config(linha) for _, linha in parte.iterrows()]
+        selecionados = (
+            parte['id_candidato'].astype(str).to_numpy() == vencedor_id
+        )
+        cores = [cor_selecionado if s else cor_demais for s in selecionados]
+
+        # Quatro paineis com barras horizontais: nomes nunca ficam inclinados.
+        altura = max(9.7, len(metricas) * (1.5 + 0.34 * len(parte)))
+        fig, eixos = plt.subplots(
+            len(metricas), 1,
+            figsize=(12.5, altura), squeeze=False, facecolor='white'
+        )
+        fig.subplots_adjust(
+            left=.30, right=.81, top=.84, bottom=.065, hspace=.57
+        )
+
+        if config['visualizacao']['padrao'].get('titulo', True):
+            titulo = 'Comparação de hiperparâmetros'
+            if total_paginas > 1:
+                titulo += f' — parte {pagina + 1}/{total_paginas}'
+            fig.suptitle(titulo, fontsize=16, color='#26374d', y=.981)
+
+        if config['visualizacao']['padrao'].get('legenda', True):
+            fig.legend(
+                handles=[
+                    Patch(facecolor=cor_selecionado,
+                          label='Modelo selecionado pelo score composto'),
+                    Patch(facecolor=cor_demais, label='Demais configurações'),
+                ],
+                loc='upper center', bbox_to_anchor=(.55, .931),
+                frameon=False, ncol=2, fontsize=9.5
+            )
+
+        for ax, metrica in zip(eixos.flat, metricas):
+            valores = parte[metrica].to_numpy(dtype=float)
+            ax.barh(posicoes, valores, height=.63, color=cores, zorder=3)
+            ax.set_yticks(posicoes, rotulos)
+            ax.invert_yaxis()  # candidato de maior score no topo
+            ax.set_xlim(*escalas[metrica])
+            ax.set_title(titulos[metrica], loc='left', fontsize=11.2,
+                         weight='semibold', color='#26374d', pad=12)
+            ax.xaxis.set_major_locator(MaxNLocator(nbins=4))
+            ax.xaxis.set_major_formatter(formato)
+            ax.tick_params(axis='x', labelsize=8.4)
+            ax.tick_params(axis='y', labelsize=9.0, length=0, pad=9)
+            ax.grid(axis='x', color='#d7dfe8', alpha=.7,
+                    linewidth=.75, zorder=0)
+            ax.set_axisbelow(True)
+            ax.axvline(0.0, color='#8291a3', linewidth=.8, zorder=2)
+            for lateral in ('top', 'right', 'left'):
+                ax.spines[lateral].set_visible(False)
+            ax.spines['bottom'].set_color('#a7b4c2')
+
+            # Coluna de valores alinhada; as barras nao encobrem os numeros.
+            for indice, (valor, selecionado) in enumerate(zip(valores, selecionados)):
+                ax.text(
+                    1.022, indice,
+                    f'{0.0 if abs(valor) < 0.00000005 else valor:.7f}',
+                    transform=ax.get_yaxis_transform(),
+                    ha='left', va='center', fontsize=9.0,
+                    weight='bold' if selecionado else 'normal',
+                    color='#245b89' if selecionado else '#35465a',
+                    clip_on=False
+                )
+            for rotulo, selecionado in zip(ax.get_yticklabels(), selecionados):
+                if selecionado:
+                    rotulo.set_weight('bold')
+                    rotulo.set_color('#245b89')
+
+        if pagina == 0:
+            arquivo = _caminho_png(destino, 'comparacao_hiperparametros', ext)
+        else:
+            arquivo = destino / (
+                f'{ARQUIVOS["comparacao_hiperparametros"]}'
+                f'_parte_{pagina + 1:02d}.{ext}'
+            )
+        _salvar(fig, arquivo, dpi=dpi)
+
     if dados:
-        # Salva quadro completo, não somente o top N visualizado.
-        _csv_protegido(grade,destino/'06_comparacao_hiperparametros_todos.csv')
+        # Todos os candidatos, sem arredondamento e sem omissao por paginacao.
+        _csv_protegido(
+            ordenada,
+            destino / '06_comparacao_hiperparametros_todos.csv'
+        )
 
 
 def gerar_graficos_oof(experimento: Path):
