@@ -1,11 +1,11 @@
-"""Passo 07.01 — seis tipos de gráficos de validação OOF, somente vencedor.
+"""Passo 07.01 — sete tipos de gráficos de validação OOF, somente vencedor.
 
 Executar, na raiz de TCC_EXPERIMENTAL_V3:
     python -m src.visualizacao_oof --experimento outputs/ensaio_pca_gmm_...
 
 Nao carrega dataset_raw.parquet, folds.npy ou F10, nao ajusta modelos e
 nao altera metricas, predições, YAML, manifestos da execucao ou selecao.
-Os graficos sao gravados em <experimento>/oof/graficos_gerados/.
+Os graficos sao gravados em <experimento>/vencedor/visualizacao/oof/.
 O gráfico 06 usa todos os candidatos; os demais usam apenas o vencedor.
 """
 from __future__ import annotations
@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from src import estrutura_saida as layout
 import warnings
 
 import matplotlib
@@ -60,15 +61,16 @@ def _ler_resultados(experimento: Path):
     """Carrega exclusivamente os dados OOF já produzidos no Passo 06.03."""
     experimento = experimento.resolve()
     arquivo_config = experimento / 'configuracao.yaml'
-    arquivo_grade = experimento / 'oof' / 'resultados_grade.csv'
-    arquivo_escolha = experimento / 'oof' / 'melhor_configuracao.json'
+    arquivo_grade = layout.metricas_vencedor(experimento) / 'resultados_grade.csv'
+    arquivo_escolha = layout.metricas_vencedor(experimento) / 'melhor_configuracao.json'
     for arquivo in (arquivo_config, arquivo_grade, arquivo_escolha):
         if not arquivo.is_file():
             raise FileNotFoundError(f'Arquivo obrigatorio ausente: {arquivo}')
     config = yaml.safe_load(arquivo_config.read_text(encoding='utf-8-sig'))
     _exigir(isinstance(config, dict), 'YAML da execucao invalido.')
-    _exigir(config['saidas']['pastas']['oof'] == 'oof', 'Pasta OOF inesperada.')
-    _exigir(config['saidas']['pastas']['graficos'] == 'graficos_gerados', 'Pasta graficos inesperada.')
+    _exigir(config['saidas']['pastas'].get('oof') == 'oof', 'Pasta OOF inesperada.')
+    _exigir(config['saidas']['pastas'].get('vencedor') == 'vencedor', 'Pasta do vencedor inesperada.')
+    _exigir(config['saidas']['pastas'].get('visualizacao') == 'visualizacao', 'Pasta de visualizacao inesperada.')
     grade = pd.read_csv(arquivo_grade, dtype={'id_candidato': str})
     exigidas = {'id_candidato','ap','mcc','logloss','score','limiar_mcc','n','prevalencia','configuracao'}
     _exigir(exigidas.issubset(grade.columns), f'CSV sem colunas {exigidas - set(grade.columns)}.')
@@ -86,7 +88,7 @@ def _ler_resultados(experimento: Path):
     _numero_proximo(escolha['score_oof'], vencedor['score'], 'score vencedor')
     _exigir(escolha['configuracao'] == json.loads(vencedor['configuracao']),
             'Configuracao escolhida diverge da grade.')
-    caminho_pred = experimento / 'oof' / 'predicoes' / f'{cid}.npz'
+    caminho_pred = layout.predicoes_vencedor(experimento)
     if not caminho_pred.is_file():
         raise FileNotFoundError(f'Predicoes OOF do vencedor ausentes: {caminho_pred}')
     with np.load(caminho_pred, allow_pickle=False) as arq:
@@ -232,34 +234,48 @@ def _plot_painel_00(config, y, p, vencedor, escolha, destino, ext, dpi, dados):
                 (fonte_titulo, fonte_secundaria, fonte_rodape)),
             'Fontes do Painel 00 fora de 6..36.')
     fig = plt.figure(figsize=tuple(tamanho), facecolor=cor_fundo)
-    fig.text(.075, .967, 'PAINEL 00', color='#7ac8fd', fontsize=12, weight='bold')
+
+
+    fig.text(.075, .967, 'PAINEL INICIAL',
+             color='#7ac8fd', fontsize=12, weight='bold')
+
+
+
     fig.text(.075, .932, 'Indicadores de desempenho e score composto',
              color=cor_texto, fontsize=fonte_titulo, weight='bold')
-    fig.text(.075, .901, 'Vencedor OOF  |  AP · MCC transformado · LogLoss transformado · média',
-             color=cor_suave, fontsize=fonte_secundaria)
+
+    
+
+
+
+
 
     cards = [
-        ('AP — Average Precision',
-         'Capacidade de identificar e ordenar fraudes em base desbalanceada.',
-         'AP', v['ap'], f"Baseline PR (prevalência): {v['prevalencia_oof']:.3f}",
-         'Comparar a AP com a prevalência de fraudes.'),
-        ('MCC — Matthews Correlation Coefficient',
-         'Qualidade da classificação, considerando VP, VN, FP e FN.',
-         '(MCC + 1) / 2', v['mcc_01'], f"MCC bruto: {v['mcc_bruto']:.3f}",
-         'MCC calculado no limiar ótimo OOF.'),
-        ('LogLoss',
-         'Qualidade das probabilidades previstas; menor LogLoss é melhor.',
-         'exp(-LogLoss)', v['logloss_01'], f"LogLoss bruto: {v['logloss_bruto']:.3f}",
-         'Transformação para escala 0–1; maior é melhor.'),
-        ('Score composto',
-         'Síntese dos três critérios com pesos iguais.',
-         'S = [AP + (MCC+1)/2 + exp(-LogLoss)] / 3', v['score_composto'],
-         'Três parcelas com peso 1/3',
-         'Score interno do TCC; não é uma métrica padronizada da literatura.'),
-    ]
+    ('AP (AVERAGE PRECISION)',
+     'Resumo da curva Precision-Recall ao longo dos limiares.',
+     'AP', v['ap'], f"AP bruto: {v['ap']:.7f}",
+     'AP calculada sobre as predições OOF.'),
+    ('MCC (MATTHEWS CORRELATION COEFFICIENT)',
+     'Qualidade da classificação, considerando VP, VN, FP e FN.',
+     '(MCC + 1) / 2', v['mcc_01'], f"MCC bruto: {v['mcc_bruto']:.7f}",
+     'MCC calculado no limiar ótimo das predições OOF.'),
+    ('LOGLOSS',
+     'Qualidade das probabilidades previstas; menor LogLoss é melhor.',
+     'exp(-LogLoss)', v['logloss_01'], f"LogLoss bruto: {v['logloss_bruto']:.7f}",
+     'LogLoss calculado sobre as predições OOF.'),
+    ('SCORE COMPOSTO',
+     'Síntese dos três critérios com pesos iguais.',
+     'S = [AP + (MCC(τ*)+1)/2 + exp(-LogLoss)] / 3', v['score_composto'],
+     'Três parcelas com peso 1/3',
+     'Critério de seleção interno do TCC, não métrica padronizada.'),
+]
+
+
+
     carta_h = .181
     for idx, (titulo, descricao, formula, valor, nota, detalhe) in enumerate(cards):
-        fundo_y = .695 - idx * .197
+        fundo_y = .720 - idx * .197
+
         fig.add_artist(FancyBboxPatch((.065, fundo_y), .87, carta_h,
             boxstyle='round,pad=0.006,rounding_size=0.021',
             transform=fig.transFigure, linewidth=1, edgecolor=cor_borda,
@@ -271,7 +287,7 @@ def _plot_painel_00(config, y, p, vencedor, escolha, destino, ext, dpi, dados):
             transform=fig.transFigure, linewidth=.8,
             edgecolor=cor_borda, facecolor='#0d1a2e'))
         fig.text(.103, fundo_y+.107, formula, color=cor_texto, fontsize=fonte_secundaria)
-        fig.text(.09, fundo_y+.068, f'{valor:.3f}'.replace('.', ','),
+        fig.text(.09, fundo_y+.068, f'{valor:.7f}',
                  color=cmap(np.clip(valor,0,1)), fontsize=24, weight='bold')
         fig.text(.91, fundo_y+.073, 'escala 0–1', color=cor_suave,
                  fontsize=fonte_secundaria-1, ha='right')
@@ -281,26 +297,53 @@ def _plot_painel_00(config, y, p, vencedor, escolha, destino, ext, dpi, dados):
                    cmap=cmap, extent=(0,1,0,1), aspect='auto', interpolation='bicubic')
         bar.axvline(np.clip(valor,0,1), color='#eaf3ff', lw=2.7)
         bar.set(xlim=(0,1), ylim=(0,1)); bar.axis('off')
-        fig.text(.09, fundo_y+.029, nota.replace('.', ','),
+        fig.text(.09, fundo_y+.029, nota,
                  color=cor_texto, fontsize=fonte_secundaria, weight='bold')
         fig.text(.09, fundo_y+.010, detalhe, color=cor_suave, fontsize=fonte_secundaria-0.3)
+    
 
-    fig.text(.075, .079,
-             f"S = [AP + (MCC(τ*)+1)/2 + exp(-LogLoss)]/3 = {v['score_composto']:.3f}".replace('.', ','),
-             fontsize=fonte_secundaria+0.5, color=cor_texto, weight='bold')
-    # Leitura do PDF: cores são uma referência relativa, sem diagnóstico universal.
-    fig.text(.075, .054,
-             'Interpretação: vermelho → menor; amarelo → intermediário; verde → maior.',
-             fontsize=fonte_rodape, color=cor_texto, weight='bold')
-    fig.text(.075, .035,
-             'As cores não definem qualidade universal. Compare AP com a prevalência',
-             fontsize=fonte_rodape, color=cor_suave)
-    fig.text(.075, .022,
-             'e LogLoss com uma previsão de referência (ex.: prevalência constante).',
-             fontsize=fonte_rodape, color=cor_suave)
-    fig.text(.075, .008,
-             f"Dados: OOF F1–F9; n={v['n_oof']:,}; τ*={v['limiar_mcc_oof']:.6g}; F10 não utilizado",
-             fontsize=fonte_rodape-0.3, color=cor_suave)
+    # Caixa de informacoes uteis
+
+    info_y = .032
+    info_h = .075
+
+    fig.add_artist(
+        FancyBboxPatch(
+            (.065, info_y),
+            .87,
+            info_h,
+            boxstyle='round,pad=0.004,rounding_size=0.008',
+            transform=fig.transFigure,
+            linewidth=1,
+            edgecolor=cor_borda,
+            facecolor='#0d1a2e'
+        )
+    )
+
+    fig.text(
+        .082,
+        info_y + .047,
+        'INFORMAÇÕES ÚTEIS',
+        color='#7ac8fd',
+        fontsize=fonte_rodape,
+        weight='bold'
+    )
+
+    fig.text(
+        .082,
+        info_y + .020,
+        (
+            f"OOF F1–F9  |  "
+            f"n={v['n_oof']}  |  "
+            f"Fraudes={int(np.count_nonzero(np.asarray(y) == 1))}  |  "
+            f"τ*={v['limiar_mcc_oof']:.7f}  |  "
+            "F10 não utilizado"
+        ),
+        color=cor_suave,
+        fontsize=fonte_rodape-0.3
+    )
+
+
     _salvar(fig, _caminho_png(destino, 'painel_score_composto', ext), dpi=dpi)
     if dados:
         tabela = pd.DataFrame([
@@ -369,94 +412,228 @@ def _limites_zoom_pr(config, ponto_mcc, prevalencia):
     return (0.0, max_x), (0.0, max_y), True
 
 
-def _plot_pr(config, y, p, vencedor, escolha, destino, ext, dpi, dados):
-    """Curva PR unificada, com ampliacao visual e sem miniatura interna.
 
-    O zoom e exclusivamente visual. Nenhum limiar, metrica ou predito muda.
-    """
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def _plot_pr(config, y, p, vencedor, escolha, destino, ext, dpi, dados):
+    """Curva Precision-Recall OOF. O zoom modifica apenas a visualizacao."""
+    from matplotlib.ticker import FuncFormatter, MaxNLocator
+
     op = _op(config, 'curva_pr')
-    prec, rec, _ = precision_recall_curve(y, p)
+    precisao, recall, _ = precision_recall_curve(y, p)
     ap = float(average_precision_score(y, p))
     prevalencia = float(np.mean(y))
     _numero_proximo(ap, vencedor['ap'], 'AP na curva PR', atol=1e-7)
+
+    # O limiar selecionado em OOF e utilizado sem nova otimizacao.
     tau = float(escolha['limiar_mcc_oof'])
-    pontos = [
-        ('MCC OOF', _ponto_operacional_pr(y, p, tau), '#178f66', 'o'),
-        ('Fixo 0,50', _ponto_operacional_pr(y, p, 0.5), '#cf4044', 'X'),
-    ]
-    pt_mcc = pontos[0][1]
-    pt_fixo = pontos[1][1]
-    xlim, ylim, ampliado = _limites_zoom_pr(config, pt_mcc, prevalencia)
-    ocultar_fixo = bool(op.get('ocultar_ponto_05_degenerado', True))
-    fixo_degenerado = (pt_fixo['positivos_previstos'] == 0 or
-                         (pt_fixo['recall'] == 0 and pt_fixo['precision'] == 0))
-    mostrar_fixo = (op.get('mostrar_ponto_05', True) is True and
-                    not (ocultar_fixo and fixo_degenerado))
+    ponto_otimo = _ponto_operacional_pr(y, p, tau)
+    ponto_fixo = _ponto_operacional_pr(y, p, 0.5)
+    xlim, ylim, ampliado = _limites_zoom_pr(config, ponto_otimo, prevalencia)
 
-    fig, ax = plt.subplots(figsize=(10.5, 6.5))
-    # Rodape de menor altura que a versao anterior (.34 -> .19).
-    fig.subplots_adjust(left=.105, right=.955, bottom=.195, top=.81)
-    ax.plot(rec, prec, color='#21558c', linewidth=1.8,
-            label=f'PR OOF · AP={ap:.5f}' if op.get('mostrar_ap', True)
-                  else 'PR OOF')
+
+    fig, ax = plt.subplots(figsize=(10.5, 7.0), facecolor='white')
+    fig.subplots_adjust(left=.115, right=.97, bottom=.280, top=.805)
+
+    # Dados originais: nao suavizar nem interpolar a curva.
+    ax.plot(
+        recall, precisao, color='#21558c', linewidth=1.8,
+        label='Curva Precision–Recall'
+    )
     if op.get('mostrar_baseline_prevalencia', True):
-        ax.axhline(prevalencia, ls='--', lw=1.35, color='#8a736b',
-                   label=f'Prevalência={prevalencia:.4%}')
+        ax.axhline(
+            prevalencia, color='#8a736b', linestyle='--', linewidth=1.35,
+            label='Prevalência de fraude'
+        )
     if op.get('mostrar_ponto_mcc_oof', True):
-        ax.scatter([pt_mcc['recall']], [pt_mcc['precision']],
-                   color=pontos[0][2], marker=pontos[0][3],
-                   s=85, zorder=7, edgecolors='white', linewidths=.9,
-                   label=f'τ*={tau:.5g} · P={pt_mcc["precision"]:.3f} · R={pt_mcc["recall"]:.3f}')
-    if mostrar_fixo:
-        ax.scatter([pt_fixo['recall']], [pt_fixo['precision']],
-                   color=pontos[1][2], marker=pontos[1][3],
-                   s=80, zorder=8, linewidths=1.1,
-                   label=f'τ=0,50 · P={pt_fixo["precision"]:.3f} · R={pt_fixo["recall"]:.3f}')
+        ax.scatter(
+            [ponto_otimo['recall']], [ponto_otimo['precision']],
+            color='#178f66', marker='o', s=82, zorder=7,
+            edgecolors='white', linewidths=.9,
+            label='Limiar ótimo do MCC (τ*)'
+        )
 
-    ax.set(xlabel='Recall — fraudes identificadas',
-           ylabel='Precision — fraudes entre alertas',
-           xlim=xlim, ylim=ylim)
-    if config['visualizacao']['padrao'].get('titulo', True):
-        fig.suptitle('01 — Curva Precision–Recall | vencedor OOF',
-                     fontsize=13, y=.988)
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
+
+
+    ax.set_xlabel(
+        'Recall — proporção de fraudes identificadas',
+        fontsize=10.5,
+        labelpad=8
+    )
+
+    ax.set_ylabel(
+        'Precisão — proporção de alertas corretos',
+        fontsize=10.5,
+        labelpad=8
+    )
+
+
+    # Sete casas em todos os rotulos numericos, sem zero negativo.
+    def formato_eixo(valor, _pos):
+        return f'{0.0 if abs(valor) < 0.00000005 else valor:.7f}'
+
+    formato = FuncFormatter(formato_eixo)
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=5))
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=5))
+    ax.xaxis.set_major_formatter(formato)
+    ax.yaxis.set_major_formatter(formato)
+    ax.tick_params(axis='both', labelsize=8.2, length=4)
+
+    # Estilo discreto, semelhante ao de figuras de artigos cientificos.
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    if config['visualizacao']['padrao'].get('grade', True):
+        ax.grid(axis='y', color='#d7dfe8', linewidth=.75, alpha=.65)
+        ax.set_axisbelow(True)
+
+        # Miniatura da curva Precision-Recall completa
     if ampliado:
-        fig.text(.105, .942,
-                 f'Zoom de leitura: Recall 0–{xlim[1]:.2f}; Precision 0–{ylim[1]:.3f}  '
-                 '(a AP utiliza toda a curva OOF)',
-                 fontsize=9, color='#52647a', va='top')
-    ax.grid(config['visualizacao']['padrao'].get('grade', True), alpha=.22)
-    if config['visualizacao']['padrao'].get('legenda', True):
-        # Legenda fora da malha, sem cobrir a curva proxima de zero.
-        fig.legend(*ax.get_legend_handles_labels(), loc='upper center',
-                   bbox_to_anchor=(.52, .922), ncol=3, fontsize=8.3,
-                   frameon=False)
+        mini = ax.inset_axes(
+            [.74, .53, .23, .39],
+            zorder=10
+        )
 
+        mini.set_facecolor('white')
+
+        # Curva original, sem suavização
+        mini.plot(
+            recall,
+            precisao,
+            color='#21558c',
+            linewidth=1.15
+        )
+
+        # Prevalência da classe fraude
+        mini.axhline(
+            prevalencia,
+            color='#8a736b',
+            linestyle='--',
+            linewidth=.9
+        )
+
+        # Ponto do limiar ótimo
+        mini.scatter(
+            [ponto_otimo['recall']],
+            [ponto_otimo['precision']],
+            color='#178f66',
+            s=15,
+            zorder=5
+        )
+
+        # Retângulo indicando a janela do gráfico principal
+        janela = Rectangle(
+            (xlim[0], ylim[0]),
+            xlim[1] - xlim[0],
+            ylim[1] - ylim[0],
+            fill=False,
+            edgecolor='#ba633d',
+            linewidth=1.3,
+            linestyle='--'
+        )
+
+        mini.add_patch(janela)
+
+        # Limites completos da curva PR
+        mini.set_xlim(0.0, 1.0)
+        mini.set_ylim(0.0, 1.0)
+
+        mini.set_title(
+            'Curva completa',
+            fontsize=8.8,
+            pad=4
+        )
+
+        # Apenas os extremos, mantendo sete casas decimais
+        mini.set_xticks([0.0, 1.0])
+        mini.set_yticks([0.0, 1.0])
+
+        mini.xaxis.set_major_formatter(formato)
+        mini.yaxis.set_major_formatter(formato)
+
+        mini.tick_params(
+            axis='both',
+            labelsize=6.4,
+            length=2,
+            pad=1
+        )
+
+        # Bordas discretas
+        for lado in mini.spines.values():
+            lado.set_edgecolor('#8493a5')
+            lado.set_linewidth(.85)
+
+        # Evita que números ultrapassem as bordas laterais
+        for lbl, align in zip(
+            mini.get_xticklabels(),
+            ['left', 'right']
+        ):
+            lbl.set_ha(align)
+
+
+    if config['visualizacao']['padrao'].get('titulo', True):
+        fig.suptitle(
+            'Curva Precision–Recall do modelo selecionado em OOF',
+            fontsize=14.5, y=.972, color='#202c3a'
+        )
+
+
+    if config['visualizacao']['padrao'].get('legenda', True):
+        fig.legend(
+            *ax.get_legend_handles_labels(),
+            loc='upper center', bbox_to_anchor=(.53, .871),
+            ncol=3,
+            frameon=False, fontsize=9.0,
+            columnspacing=2.2, handletextpad=.65
+        )
+
+    # Resultados concentrados em um unico local, sem repetir a legenda.
     if op.get('mostrar_resumo_operacional', True):
-        fig.text(.105, .126,
-                 f'AP={ap:.5f}  |  Prevalência={prevalencia:.4%}  |  τ* MCC OOF={tau:.6g}',
-                 fontsize=9.3, weight='bold', color='#26374d', va='top')
-        fig.text(.105, .093,
-                 f'τ*: P={pt_mcc["precision"]:.4f}, R={pt_mcc["recall"]:.4f}   |   '
-                 f'0,50: P={pt_fixo["precision"]:.4f}, R={pt_fixo["recall"]:.4f}',
-                 fontsize=9.1, color='#26374d', va='top')
-        nota = ('Limiar 0,50 sem positivos previstos: P=0 apenas por convenção; '
-                'ponto omitido do desenho.' if not pt_fixo['precision_definida'] else
-                'Mesmas predições OOF; AP não é área trapezoidal; fraude = 1.')
-        fig.text(.105, .058, nota, fontsize=8.4,
-                 color='#a04442' if not pt_fixo['precision_definida'] else '#52647a',
-                 va='top')
-        if ampliado:
-            fig.text(.105, .031, 'Nota: o zoom pode cortar picos de Precision; a AP considera a curva completa.',
-                     fontsize=8.0, color='#52647a', va='top')
+        fig.text(
+            .115, .178, 'Resultados da validação OOF',
+            fontsize=10.5, weight='bold', color='#26374d'
+        )
+        fig.text(
+            .115, .139,
+            f'AP = {ap:.7f}   |   Prevalência = {prevalencia:.7f}   |   τ* = {tau:.7f}',
+            fontsize=9.5, color='#26374d'
+        )
+        fig.text(
+            .115, .101,
+            f'Em τ*: Precisão = {ponto_otimo["precision"]:.7f}   |   '
+            f'Recall = {ponto_otimo["recall"]:.7f}',
+            fontsize=9.5, color='#26374d'
+        )
 
     _salvar(fig, _caminho_png(destino, 'curva_pr', ext), dpi=dpi)
     if dados:
-        _csv_protegido(pd.DataFrame({'recall':rec,'precision':prec}),
-                       destino/'01_curva_precision_recall.csv')
-        _csv_protegido(pd.DataFrame([
-            {'corte': nome, **pt, 'ap_oof': ap, 'prevalencia_oof':prevalencia,
-             'origem': 'OOF_F1_F9'} for nome, pt, _, _ in pontos
-        ]), destino/'01_curva_precision_recall_pontos.csv')
+        _csv_protegido(
+            pd.DataFrame({'recall': recall, 'precision': precisao}),
+            destino / '01_curva_precision_recall.csv'
+        )
+        _csv_protegido(
+            pd.DataFrame([
+                {'corte': nome, **pt, 'ap_oof': ap,
+                 'prevalencia_oof': prevalencia, 'origem': 'OOF_F1_F9'}
+                for nome, pt in [('MCC OOF', ponto_otimo), ('Fixo 0,50', ponto_fixo)]
+            ]),
+            destino / '01_curva_precision_recall_pontos.csv'
+        )
+
 
 
 def _pontos_operacionais_mcc(y, p, limiar_oof):
@@ -1069,7 +1246,7 @@ def gerar_graficos_oof(experimento: Path):
     dpi=int(pad.get('dpi',180))
     _exigir(50<=dpi<=1200,'visualizacao.padrao.dpi fora da faixa 50..1200.')
     dados=pad.get('salvar_dados_grafico',True) is True
-    destino=experimento/'oof'/'graficos_gerados'
+    destino=layout.imagens_oof(experimento)
     destino.mkdir(parents=True,exist_ok=True)
     vencedor=grade.iloc[0]
     gerados=[];omitidos=[]
