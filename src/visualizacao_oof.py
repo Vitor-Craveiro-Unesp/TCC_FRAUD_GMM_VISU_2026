@@ -753,17 +753,19 @@ def _plot_mcc(config, y, p, vencedor, escolha, destino, ext, dpi, dados):
     # Reservas exclusivas: cabecalho, legenda, malha, rotulos e rodape.
     # Nao posicionar textos manuais sobre a area do xlabel.
     fig.subplots_adjust(left=.105, right=.965, bottom=.265, top=.775)
+
+
     ax.plot(threshold[vis], mcc[vis], lw=1.65, color='#385aaf',
-            label='MCC bruto por limiar (OOF)')
-    if op.get('mostrar_linha_mcc_zero', True):
-        ax.axhline(0, color='#9ba5b1', linestyle=':', linewidth=1, alpha=.8)
+            label='MCC por limiar')
+
     if op.get('mostrar_limiar_oof', True):
         ax.axvline(tau, ls='--', color='#168e66', lw=1.25,
-                   label=f'Limiar ótimo: τ*={tau:.6g}')
+                   label='Limiar ótimo (τ*)')    
+        
     if op.get('mostrar_mcc_no_limiar_oof', True):
         ax.scatter([tau], [otimo['mcc_bruto']], s=78, marker='o',
                    color='#168e66', edgecolors='white', linewidths=.9, zorder=6,
-                   label=f'MCC(τ*)={otimo["mcc_bruto"]:.5f}')
+                   label='MCC no limiar ótimo')
 
     # Em bases desbalanceadas, 0,50 costuma ficar fora do zoom: manter a
     # comparacao numerica no rodape, sem achatar a curva ou criar ponto falso.
@@ -787,32 +789,67 @@ def _plot_mcc(config, y, p, vencedor, escolha, destino, ext, dpi, dados):
     minimo, maximo = min(valores_y), max(valores_y)
     margem = max(.005, (maximo-minimo)*.12)
     ax.set_ylim(max(-1., minimo-margem), min(1., maximo+margem))
+
+    from matplotlib.ticker import FuncFormatter, MaxNLocator
+
+    def formato_eixo(valor, _pos):
+        return f'{0.0 if abs(valor) < 0.00000005 else valor:.7f}'
+
+    formato = FuncFormatter(formato_eixo)
+
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=5))
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=6))
+
+    ax.xaxis.set_major_formatter(formato)
+    ax.yaxis.set_major_formatter(formato)
+
+    ax.tick_params(axis='both', labelsize=8.5)
+
+
     if config['visualizacao']['padrao'].get('titulo', True):
-        fig.suptitle('02 — MCC por limiar | vencedor OOF', fontsize=15, y=.972)
-    if ampliado:
-        fig.text(.105, .913,
-                 f'Zoom automatico: τ de {xlim[0]:.5g} a {xlim[1]:.5g}  |  '
-                 'dados completos preservados em CSV',
-                 fontsize=9.5, color='#52647a', va='top')
+        fig.suptitle('MCC por limiar', fontsize=15, y=.972)
+
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
     if config['visualizacao']['padrao'].get('grade', True):
-        ax.grid(alpha=.22)
+        ax.grid(axis='y', color='#d7dfe8', linewidth=.75, alpha=.65)
+        ax.set_axisbelow(True)
+
     if config['visualizacao']['padrao'].get('legenda', True):
         fig.legend(*ax.get_legend_handles_labels(), loc='upper center',
                    bbox_to_anchor=(.535, .864), ncol=3, fontsize=9.0,
                    frameon=False, columnspacing=1.8, handlelength=2.1)
 
     if op.get('mostrar_resumo_operacional', True):
-        # Tres linhas curtas com distancia real do xlabel, nao na malha.
-        fig.text(.105, .137,
-            f'MCC otimo OOF: τ*={tau:.6g}  |  MCC(τ*)={otimo["mcc_bruto"]:.5f}',
-            fontsize=10.2, weight='bold', color='#273c56', va='top')
-        fig.text(.105, .097,
-            f'Referencia fixa: τ=0,50  |  MCC(0,50)={fixo["mcc_bruto"]:.5f}'
-            + (' (fora do zoom)' if not fixo_visivel else ''),
-            fontsize=9.4, color='#273c56', va='top')
-        fig.text(.105, .054,
-            'Zoom apenas visual · MCC bruto (−1 a +1) · OOF F1–F9 · F10 não utilizado',
-            fontsize=8.8, color='#52647a', va='top')
+        fig.text(
+            .105, .150,
+            'Resultados da validação OOF',
+            fontsize=10.5,
+            weight='bold',
+            color='#26374d',
+            va='top'
+        )
+
+        fig.text(
+            .105, .108,
+            f'Limiar ótimo τ* = {tau:.7f}   |   '
+            f'MCC(τ*) = {otimo["mcc_bruto"]:.7f}',
+            fontsize=9.7,
+            color='#26374d',
+            va='top'
+        )
+
+        fig.text(
+            .105, .068,
+            f'Em τ = 0.5000000: MCC = {fixo["mcc_bruto"]:.7f}'
+            + (' (fora da região exibida)' if not fixo_visivel else ''),
+            fontsize=9.3,
+            color='#52647a',
+            va='top'
+        )
+
+        
     _salvar(fig, _caminho_png(destino, 'curva_mcc', ext), dpi=dpi)
     if dados:
         _csv_protegido(pd.DataFrame({'limiar':threshold, 'mcc':mcc}),
@@ -912,133 +949,128 @@ def _qualidade_cor(lims, invertido):
 
 
 def _matriz(config, y, p, limiar, nome, destino, ext, dpi, dados):
-    """Painel detalhado por quadrante fiel ao PDF; um painel para cada corte.
+    """Matriz OOF por quadrante, com barras de proximidade ao ideal.
 
-    Arquivos 03=0,50 e 04=τ* OOF, nomes preservados. Nenhum limiar e
-    selecionado ou otimizado aqui: sao utilizados os valores recebidos.
+    As cores indicam somente a distancia numerica ao ideal. Nao ha
+    classificacao em bom, medio ou ruim. Os dados e o CSV sao preservados.
     """
-    cm, linhas = _dados_quadrantes(y,p,limiar,config)
+    cm, linhas = _dados_quadrantes(y, p, limiar, config)
     tn, fp, fn, tp = map(int, cm.ravel())
-    n0, n1 = tn+fp, fn+tp
-    op = config['visualizacao'].get('estilo_matrizes',{})
-    _exigir(op.get('layout', 'quadrantes_pdf') == 'quadrantes_pdf',
-            'Layout da matriz desconhecido. Use quadrantes_pdf.')
-    mostra = op.get('mostrar',{})
-    pal = op.get('cores_painel',{})
-    bg=pal.get('fundo','#091425')
-    cartao=pal.get('cartao','#12213b')
-    borda=pal.get('borda','#294766')
-    texto=pal.get('texto','#f6f8fc')
-    secundario=pal.get('secundario','#b2bfd3')
+    n0, n1 = tn + fp, fn + tp
 
-    fig=plt.figure(figsize=(11.6,14.3),facecolor=bg)
-    def figura_caixa(x,y,w,h,cor,raio=.012,contorno=borda):
-        fig.add_artist(FancyBboxPatch((x,y),w,h,
-              boxstyle=f'round,pad=0.006,rounding_size={raio}',
-              transform=fig.transFigure,facecolor=cor,edgecolor=contorno,
-              linewidth=.9,zorder=0))
-    def t(x,y,s,**kwargs):
-        fig.text(x,y,s,transform=fig.transFigure,color=kwargs.pop('color',texto),
-                 va=kwargs.pop('va','top'),**kwargs)
-    def pct_texto(pct):
-        return 'N/A' if pct is None else f'{pct:.2f}%'.replace('.',',')
-    def inteiro(n):return f'{int(n):,}'.replace(',','.')
+    op = config['visualizacao'].get('estilo_matrizes', {})
+    _exigir(
+        op.get('layout', 'quadrantes_pdf') == 'quadrantes_pdf',
+        'Layout de matriz desconhecido.'
+    )
+    pal = op.get('cores_painel', {})
+    bg = pal.get('fundo', '#091425')
+    cartao = pal.get('cartao', '#12213b')
+    borda = pal.get('borda', '#294766')
+    texto = pal.get('texto', '#f6f8fc')
+    secundario = pal.get('secundario', '#b2bfd3')
 
-    is_mcc = nome=='matriz_confusao_mcc'
-    corte='LIMIAR ÓTIMO MCC OOF' if is_mcc else 'CORTE FIXO 0,50'
-    numero='04' if is_mcc else '03'
-    mcc=float(matthews_corrcoef(y,p>=limiar))
-    t(.065,.973,f'{numero} — Matriz de confusão detalhada por quadrante',
-      fontsize=20.5,weight='bold')
-    t(.065,.936,'Validação OOF · Classe positiva = fraude (1) · Normalização pela classe real',
-      fontsize=11.0,color=secundario)
-    t(.065,.898,corte,fontsize=12.8,weight='bold',color='#a9c8eb')
-    rotulo_tau=f'{limiar:.6g}'.replace('.', ',')
-    rotulo_mcc=f'{mcc:.5f}'.replace('.', ',')
-    t(.934,.898,f'τ={rotulo_tau}  ·  MCC={rotulo_mcc}',
-      fontsize=11.7,weight='bold',ha='right')
+    def fracao(pct):
+        return 'N/A' if pct is None else f'{float(pct) / 100.0:.7f}'
 
-    # Percentuais complementares dentro de cada classe real.
-    resumo=[('CLASSE REAL: LEGÍTIMA','VN e FP somam 100%',n0,'TN','FP'),
-            ('CLASSE REAL: FRAUDE','FN e VP somam 100%',n1,'FN','TP')]
-    por_chave={r['quadrante']:r for r in linhas}
-    for idx,(cab,nota,total,c1,c2) in enumerate(resumo):
-        x=.065+idx*.44
-        figura_caixa(x,.817,.420,.059,cartao,raio=.007)
-        t(x+.016,.864,cab,fontsize=10.3,weight='bold')
-        t(x+.016,.844, f'{pct_texto(por_chave[c1]["pct_da_classe_real"])} / '
-                      f'{pct_texto(por_chave[c2]["pct_da_classe_real"])}  '
-                      f'  |  N={inteiro(total)}',fontsize=11.4,weight='bold')
-        t(x+.016,.827,nota,fontsize=8.7,color=secundario)
+    def inteiro(valor):
+        return str(int(valor))
 
-    # Quatro cartoes, mantendo a ordem TN, FP, FN, TP do PDF.
-    topo=.795; altura=.154; intervalo=.012
-    nomes_ordem=['TN','FP','FN','TP']
-    for indice,chave in enumerate(nomes_ordem):
-        linha=por_chave[chave]
-        y0=topo-altura-indice*(altura+intervalo)
-        figura_caixa(.065,y0,.868,altura,cartao,raio=.011)
-        codigo,titulo,descricao,notas=_DESCRICOES_PDF[chave]
-        pct=linha['pct_da_classe_real']
-        limites=(linha['faixa_limite_1_pct'],linha['faixa_limite_2_pct'])
-        invertido = chave in ('FP','FN')
-        t(.089,y0+altura-.015,f'{codigo}  {titulo}',fontsize=14.2,weight='bold')
-        t(.907,y0+altura-.012,pct_texto(pct),fontsize=20.2,weight='bold',ha='right')
-        t(.089,y0+altura-.045,descricao,fontsize=10.1,color=secundario)
-        nums=[]
-        if mostra.get('contagem_observada',True):nums.append('Observado: '+inteiro(linha['observado']))
-        if mostra.get('contagem_ideal',True):nums.append('Ideal: '+inteiro(linha['ideal']))
-        if mostra.get('diferenca_absoluta_do_ideal',True):nums.append('Δ ideal: '+inteiro(linha['delta_ideal']))
-        if mostra.get('percentual_proximidade',True) and linha['proximidade_pct'] is not None:
-            nums.append('Proximidade: '+pct_texto(linha['proximidade_pct']))
-        if nums:t(.089,y0+altura-.065,'    |    '.join(nums),fontsize=8.5,color=secundario)
-        ax_bar=fig.add_axes((.09,y0+.056,.816,.013))
-        grad=np.linspace(0,1,900).reshape(1,-1)
-        ax_bar.imshow(grad,aspect='auto',cmap=_qualidade_cor(limites,invertido),
-                      vmin=0,vmax=1,extent=(0,100,0,1))
-        if pct is not None:
-            ax_bar.axvline(pct,color='white',lw=2.2,solid_capstyle='round')
-        ax_bar.set_xlim(0,100);ax_bar.set_ylim(0,1);ax_bar.axis('off')
-        # A barra representa percentual REAL (nao posicao normalizada da faixa).
-        labels= ([('Bom',f'0–{limites[0]:g}%'),('Médio',f'{limites[0]:g}–{limites[1]:g}%'),
-                  ('Ruim',f'>{limites[1]:g}%')] if invertido else
-                 [('Ruim',f'0–{limites[0]:g}%'),('Médio',f'{limites[0]:g}–{limites[1]:g}%'),
-                  ('Bom',f'{limites[1]:g}–100%')])
-        xs=(.09,.467,.908)
-        for j,(rot,faixa) in enumerate(labels):
-            t(xs[j],y0+.044,f'{rot}: {faixa}',fontsize=9.2,color=secundario,
-              ha='right' if j==2 else 'center' if j==1 else 'left')
-        texto_notas='    •    '.join(notas)
-        t(.089,y0+.022,texto_notas,fontsize=8.1,color=secundario)
+    def caixa(x, y0, largura, altura):
+        fig.add_artist(FancyBboxPatch(
+            (x, y0), largura, altura,
+            boxstyle='round,pad=0.006,rounding_size=0.010',
+            transform=fig.transFigure, facecolor=cartao,
+            edgecolor=borda, linewidth=.9, zorder=0
+        ))
 
-    # Rodape separado: mesma amostra e mesmo score, so o corte muda.
-    pred=p>=limiar
-    pr=precision_score(y,pred,zero_division=0)
-    rc=recall_score(y,pred,zero_division=0)
-    f1=f1_score(y,pred,zero_division=0)
-    especificidade=tn/n0 if n0 else float('nan')
-    indicadores={'accuracy':f'Accuracy={(tn+tp)/len(y):.4f}',
-          'precision':f'Precisão={pr:.4f}',
-          'recall_sensibilidade':f'Recall={rc:.4f}',
-          'especificidade':f'Especificidade={especificidade:.4f}',
-          'f1':f'F1={f1:.4f}',
-          'fpr':f'FPR={fp/n0:.4f}' if n0 else 'FPR=N/A',
-          'fnr':f'FNR={fn/n1:.4f}' if n1 else 'FNR=N/A',
-          'mcc':f'MCC={mcc:.5f}',
-          'prevalencia':f'Prevalência={np.mean(y):.4%}'}
-    selecionados=[v for k,v in indicadores.items() if op.get('rodape',{}).get(k,False)]
-    if selecionados:
-        t(.065,.117,'  ·  '.join(selecionados[:4]),fontsize=10.0,weight='bold')
-        if len(selecionados)>4:
-            t(.065,.091,'  ·  '.join(selecionados[4:]),fontsize=9.6,color=secundario)
-    t(.065,.055,'Faixas bom/médio/ruim: referências ilustrativas e contextuais do catálogo; não são padrões universais.',
-      fontsize=9.0,color='#edd091')
-    t(.065,.031,'Mesmos dados e scores OOF F1–F9 · F10 não utilizado · Nenhum novo limiar selecionado.',
-      fontsize=9.1,color=secundario)
+    def escrever(x, y0, mensagem, **kwargs):
+        fig.text(
+            x, y0, mensagem, transform=fig.transFigure,
+            color=kwargs.pop('color', texto), va='top', **kwargs
+        )
 
-    _salvar(fig,_caminho_png(destino,nome,ext),dpi=dpi)
+    por_chave = {linha['quadrante']: linha for linha in linhas}
+    is_mcc = nome == 'matriz_confusao_mcc'
+    titulo_corte = (
+        f'LIMIAR ÓTIMO DO MCC: τ* = {limiar:.7f}'
+        if is_mcc else f'CORTE FIXO: τ = {limiar:.7f}'
+    )
+    escala = LinearSegmentedColormap.from_list(
+        'proximidade_ideal_matriz', ['#d6333a', '#f0d94c', '#1b9e62']
+    )
+
+    fig = plt.figure(figsize=(11.6, 12.6), facecolor=bg)
+    escrever(.065, .967, 'Matriz de confusão por quadrante',
+             fontsize=20, weight='bold')
+    escrever(.065, .916, titulo_corte,
+             fontsize=11, weight='bold', color='#a9c8eb')
+
+    resumos = [
+        ('CLASSE REAL: LEGÍTIMA', n0, 'TN', 'FP', 'VN', 'FP'),
+        ('CLASSE REAL: FRAUDE', n1, 'FN', 'TP', 'FN', 'VP'),
+    ]
+    for indice, (titulo, total, a, b, sigla_a, sigla_b) in enumerate(resumos):
+        x = .065 + indice * .44
+        caixa(x, .800, .420, .080)
+        escrever(x + .016, .864, titulo, fontsize=10.6, weight='bold')
+        escrever(
+            x + .016, .828,
+            f'{sigla_a}: {fracao(por_chave[a]["pct_da_classe_real"])}  |  '
+            f'{sigla_b}: {fracao(por_chave[b]["pct_da_classe_real"])}  |  '
+            f'n={inteiro(total)}',
+            fontsize=9.1, color=secundario
+        )
+
+    topo_primeiro = .782
+    altura = .164
+    intervalo = .180
+    for indice, chave in enumerate(('TN', 'FP', 'FN', 'TP')):
+        linha = por_chave[chave]
+        y0 = topo_primeiro - altura - indice * intervalo
+        caixa(.065, y0, .868, altura)
+
+        codigo, titulo, descricao, _notas = _DESCRICOES_PDF[chave]
+        observado = inteiro(linha['observado'])
+        ideal = inteiro(linha['ideal'])
+        delta = inteiro(linha['delta_ideal'])
+        valor_observado = fracao(linha['pct_da_classe_real'])
+        proximidade_pct = linha['proximidade_pct']
+        valor_proximidade = fracao(proximidade_pct)
+
+        escrever(.089, y0 + .140, f'{codigo} — {titulo}',
+                 fontsize=14, weight='bold')
+        escrever(.909, y0 + .141, valor_observado,
+                 fontsize=18.5, weight='bold', ha='right')
+        escrever(.089, y0 + .112, descricao,
+                 fontsize=10.0, color=secundario)
+        escrever(.089, y0 + .081,
+                 f'Observado: {observado}   |   Ideal: {ideal}   |   Δ ideal: {delta}',
+                 fontsize=10.0, color=texto)
+        escrever(.089, y0 + .058,
+                 f'Proximidade ao ideal: {valor_proximidade}',
+                 fontsize=9.7, color=secundario)
+
+        # A barra usa sempre a escala de proximidade ao ideal, de 0 a 1.
+        barra = fig.add_axes([.09, y0 + .025, .816, .014])
+        barra.imshow(
+            np.linspace(0, 1, 600)[None, :],
+            origin='lower', cmap=escala, extent=(0, 1, 0, 1),
+            aspect='auto', interpolation='bicubic'
+        )
+        if proximidade_pct is not None:
+            proximidade = float(proximidade_pct) / 100.0
+            barra.axvline(proximidade, color='#f6f8fc', lw=2.7,
+                          clip_on=False)
+        barra.set(xlim=(0, 1), ylim=(0, 1))
+        barra.axis('off')
+
+    _salvar(fig, _caminho_png(destino, nome, ext), dpi=dpi)
     if dados:
-        _csv_protegido(pd.DataFrame(linhas),destino/(ARQUIVOS[nome]+'.csv'))
+        # Mesmo conteudo de auditoria usado antes da alteracao visual.
+        _csv_protegido(
+            pd.DataFrame(linhas), destino / (ARQUIVOS[nome] + '.csv')
+        )
 
 
 def _limites_x_distribuicao(op, y, p, tau):
