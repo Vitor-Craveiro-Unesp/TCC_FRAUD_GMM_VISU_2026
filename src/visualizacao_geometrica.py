@@ -277,19 +277,56 @@ def _painel_parametros_gaussianos(config, data, dest, ext, dpi, csv):
     op = config['visualizacao']['graficos']['painel_parametros_gaussianos']
     por_pagina = int(op.get('gaussianas_por_pagina', 4))
     _exigir(1 <= por_pagina <= 8, 'gaussianas_por_pagina deve ficar entre 1 e 8.')
+
     rows, regra = _linhas_gaussianas(config, data)
+
+    def numero7(valor):
+        valor = float(valor)
+        return f'{0.0 if abs(valor) < 0.00000005 else valor:.7f}'
     d = len(rows[0]['media_vetor_completo'])
+
     _exigir(1 <= d <= 3, 'O painel do PDF foi definido apenas para 1D, 2D e 3D.')
     n_paginas = (len(rows) + por_pagina - 1) // por_pagina
     for pag in range(n_paginas):
         bloco = rows[pag * por_pagina:(pag + 1) * por_pagina]
         ncol = 2 if len(bloco) > 1 else 1
         nrow = (len(bloco) + ncol - 1) // ncol
-        fig, axs = plt.subplots(nrow, ncol, figsize=(13.8 if ncol == 2 else 7.4,
-                                                  1.65 + nrow * 4.6), squeeze=False)
+
+
+
+        altura_fig = 1.65 + nrow * 4.6
+
+        fig, axs = plt.subplots(
+            nrow,
+            ncol,
+            figsize=(13.8 if ncol == 2 else 7.4, altura_fig),
+            squeeze=False
+        )
+
         fig.patch.set_facecolor('#0d192d')
-        titulo = f'GMM 09 — Painel de parâmetros gaussianos | {d}D | {data["gmm"].modelo_.covariance_type.upper()}'
-        fig.suptitle(titulo, color='#f2f7ff', fontweight='bold', fontsize=17, y=.985)
+
+        fig.suptitle(
+            'PAINEL DE PARÂMETROS GAUSSIANOS',
+            color='#f2f7ff',
+            fontweight='bold',
+            fontsize=18,
+            y=.985
+        )
+
+        y_subtitulo = .985 - (0.50 / altura_fig)
+
+        fig.text(
+            .5,
+            y_subtitulo,
+            f'PARTE {pag + 1:02d} DE {n_paginas:02d}  |  '
+            f'{d}D  |  GMM {data["gmm"].modelo_.covariance_type.upper()}',
+            ha='center',
+            va='top',
+            color='#b9dcff',
+            fontsize=10.5
+        )
+
+
         for j, ax in enumerate(axs.flat):
             ax.set_facecolor('#172b46')
             ax.set_xticks([]); ax.set_yticks([])
@@ -304,37 +341,126 @@ def _painel_parametros_gaussianos(config, data, dest, ext, dpi, csv):
             ax.plot([.05,.05], [.06,.93],color=cor,lw=5,transform=ax.transAxes,solid_capstyle='round')
             ax.text(.09,.89,info['gaussiana'],transform=ax.transAxes,
                     fontsize=16,fontweight='bold',color='#f5f9ff',va='center')
+
+
+            
             alto = info['rotulo_descritivo'] == regra['rotulo_alto']
-            ax.text(.94,.89,info['descricao_rotulo'],transform=ax.transAxes,
-                    ha='right',va='center', fontsize=10,fontweight='bold',
-                    color='#ffc99f' if alto else '#b9dcff')
-            ax.text(.09,.74,f"Peso da mistura  πₖ = {info['peso_mistura']:.6g}",
-                    transform=ax.transAxes,color='#e7f1ff',fontsize=11)
-            ax.text(.09,.65,f"Risco histórico  rₖ = {info['risco_historico']:.6g} ({100*info['risco_historico']:.3f}%)",
-                    transform=ax.transAxes,color='#e7f1ff',fontsize=11)
-            medias = ', '.join(f'{v:.5g}' for v in info['media_vetor_completo'])
+
+            status = (
+                'Acima do critério de alto risco'
+                if alto else
+                'Abaixo do critério de alto risco'
+            )
+
+            ax.text(
+                .94, .89, status,
+                transform=ax.transAxes,
+                ha='right',
+                va='center',
+                fontsize=9.2,
+                fontweight='bold',
+                color='#ffc99f' if alto else '#b9dcff'
+            )
+
+            if not alto and info['risco_historico'] > regra['prevalencia_treino']:
+                ax.text(
+                    .94, .815,
+                    'Acima da prevalência do treino',
+                    transform=ax.transAxes,
+                    ha='right',
+                    va='center',
+                    fontsize=8.3,
+                    color='#b9dcff'
+                )
+
+            
+            ax.text(
+                .09, .74,
+                f"Peso da mistura  πₖ = {numero7(info['peso_mistura'])}",
+                transform=ax.transAxes,
+                color='#e7f1ff',
+                fontsize=11
+            )
+
+            ax.text(
+                .09, .65,
+                f"Risco histórico  rₖ = {numero7(info['risco_historico'])}",
+                transform=ax.transAxes,
+                color='#e7f1ff',
+                fontsize=11
+            )
+
+
+            
+            medias = ', '.join(
+                numero7(v) for v in info['media_vetor_completo']
+            )
+
+
             ax.text(.09,.53,'Vetor de médias μₖ',transform=ax.transAxes,
                     color='#a9d4ff',fontsize=11,fontweight='bold')
             ax.text(.11,.445,'[' + medias + ']',transform=ax.transAxes,
                     color='#f5f9ff',fontsize=10.5,family='monospace')
             ax.text(.09,.34,'Matriz de covariâncias Σₖ',transform=ax.transAxes,
                     color='#a9d4ff',fontsize=11,fontweight='bold')
-            linhas = [('[ ' if i == 0 else '  ') + '   '.join(f'{v: .4g}' for v in linha) +
-                      (' ]' if i == d - 1 else '')
-                      for i,linha in enumerate(info['covariancia_completa'])]
+
+            
+            linhas = [
+                ('[ ' if i == 0 else '  ')
+                + '  '.join(f'{numero7(v):>11}' for v in linha)
+                + (' ]' if i == d - 1 else '')
+                for i, linha in enumerate(info['covariancia_completa'])
+            ]
+
+            
             ax.text(.105,.265,'\n'.join(linhas),transform=ax.transAxes,
                     color='#f5f9ff',fontsize=10.2,family='monospace',va='top',linespacing=1.35)
             ax.set_xlim(0,1);ax.set_ylim(0,1)
+
+
+
+
+
+        origem_gmm = (
+            'RUS'
+            if data['n_treino_gmm'] < len(data['y'])
+            else 'amostra completa'
+        )
+
         fig.text(
-                .5, .045,
-                f"Regra DESCRITIVA: alto risco se rₖ ≥ {regra['multiplicador_prevalencia']:.3g} × prevalência do treino "
-                f"({regra['prevalencia_treino']:.6%}) = {regra['limiar_alto_risco_gaussiana']:.6%}  |  "
-                "Não classifica transações; F10 não utilizado.",
-                ha='center',
-                color='#c8d8ec',
-                fontsize=9.5
-                )
-        fig.subplots_adjust(left=.055,right=.945,top=.88,bottom=.12,hspace=.18,wspace=.09)
+            .5, .069,
+            f"Critério descritivo: rₖ ≥ "
+            f"{numero7(regra['multiplicador_prevalencia'])} × "
+            f"{numero7(regra['prevalencia_treino'])} = "
+            f"{numero7(regra['limiar_alto_risco_gaussiana'])}",
+            ha='center',
+            color='#f2f7ff',
+            fontsize=9.5
+        )
+
+        fig.text(
+            .5, .037,
+            f"πₖ, μₖ e Σₖ: GMM ajustado com {origem_gmm}; "
+            "rₖ: responsabilidades e rótulos do treino original.",
+            ha='center',
+            color='#c8d8ec',
+            fontsize=9.0
+        )
+
+
+        
+        topo_cartoes = y_subtitulo - (0.95 / altura_fig)
+
+        fig.subplots_adjust(
+            left=.055,
+            right=.945,
+            top=topo_cartoes,
+            bottom=.14,
+            hspace=.18,
+            wspace=.09
+        )
+
+
         stem = '09_painel_parametros_gaussianos'
         if n_paginas > 1: stem += f'_parte_{pag+1:02d}'
         _guardar(fig,dest,stem,ext,dpi)
@@ -385,10 +511,19 @@ def _scree(config, data, dest, ext, dpi, csv, *, origem='desenvolvimento'):
                     'Referencia de variancia acumulada invalida.')
             ax_acum.axhline(valor, color='#64748b', linestyle=':',
                             linewidth=.85, alpha=.55, zorder=1)
-            ax_acum.text(.995, valor, f'{valor:.0%}',
-                         transform=ax_acum.get_yaxis_transform(),
-                         ha='right', va='bottom', fontsize=7.8,
-                         color='#69788b')
+
+            
+            ax_acum.text(
+                .995, valor,
+                f'{valor:.7f}',
+                transform=ax_acum.get_yaxis_transform(),
+                ha='right',
+                va='bottom',
+                fontsize=7.8,
+                color='#69788b'
+            )
+
+            
         for j in op.get('marcar_acumulados', [1, 2, 3]):
             k = int(j)
             if 1 <= k <= len(acumulada):
@@ -397,10 +532,35 @@ def _scree(config, data, dest, ext, dpi, csv, *, origem='desenvolvimento'):
     if op.get('destacar_componentes_selecionados', True):
         ax.axvline(nsel, color='#101820', linewidth=1.65,
                    linestyle='--', alpha=.85, zorder=6)
-    ax.set(xlabel='Componente principal', ylabel='Variância individual (%)')
-    ax_acum.set_ylabel('Variância acumulada (%)', color='#c62828')
-    ax.yaxis.set_major_formatter(PercentFormatter(1.0))
-    ax_acum.yaxis.set_major_formatter(PercentFormatter(1.0))
+
+        
+        
+    ax.set_xlabel('Componente principal', fontsize=11)
+
+    ax.set_ylabel(
+        'Variância individual explicada',
+        fontsize=11,
+        labelpad=12
+    )
+
+    ax_acum.set_ylabel(
+        'Variância explicada acumulada',
+        fontsize=11,
+        color='#c62828',
+        labelpad=14
+    )
+
+    from matplotlib.ticker import FormatStrFormatter
+
+    ax.yaxis.set_major_formatter(
+        FormatStrFormatter('%.7f')
+    )
+
+    ax_acum.yaxis.set_major_formatter(
+        FormatStrFormatter('%.7f')
+    )
+
+
     ax.set_ylim(0, max(.03, min(1.0, float(max(ratio))*1.18)))
     ax_acum.set_ylim(0, 1.045)
     ax.set_xlim(.35, len(ratio)+.7)
@@ -412,20 +572,38 @@ def _scree(config, data, dest, ext, dpi, csv, *, origem='desenvolvimento'):
     ax.set_xticks(xt)
     ax.grid(axis='y', linestyle=':', color='#9ca3af', alpha=.22)
 
-    # Numeros C(1), C(2), C(3) sempre identificados explicitamente e SEM
-    # sobreposicao, inclusive quando existem dezenas de componentes.
-    marcacoes = ',  '.join(f'C({j}) = {acumulada[j-1]:.1%}'
-                           for j in (1, 2, 3) if j <= len(acumulada))
-    fig.suptitle('11 — Variância explicada / Scree plot | PCA diagnóstico',
-                 fontsize=16, weight='bold', y=.978)
-    fig.text(.5, .927, marcacoes + f'    |    PCA vencedor: {nsel} PC(s)',
-             ha='center', fontsize=10.5, color='#26364a', weight='medium')
+
+    fig.suptitle(
+        'Variância explicada / Scree plot',
+        fontsize=16,
+        weight='bold',
+        color='#26364a',
+        y=.978
+    )
+
+    
     legenda = []
+
     if barras:
-        legenda.append(Patch(facecolor='#83bb79', label='Variância individual'))
+        legenda.append(
+            Patch(
+                facecolor='#83bb79',
+                label='Variância individual explicada'
+            )
+        )
+
     if linha:
-        legenda.append(Line2D([0], [0], color='#d92e2e', lw=2.2,
-                              marker='o', label='Variância acumulada'))
+        legenda.append(
+            Line2D(
+                [0], [0],
+                color='#d92e2e',
+                lw=2.2,
+                marker='o',
+                label='Variância explicada acumulada'
+            )
+        )
+
+        
     if op.get('destacar_componentes_selecionados', True):
         legenda.append(Line2D([0], [0], color='#101820', lw=1.65,
                               ls='--', label=f'PCA selecionado: {nsel}'))
@@ -439,7 +617,14 @@ def _scree(config, data, dest, ext, dpi, csv, *, origem='desenvolvimento'):
     fig.text(.5, .035,
              nota + ' Variância explicada não mede separação de fraudes; F10 não utilizado.',
              ha='center', fontsize=8.7, color='#506079')
-    fig.subplots_adjust(left=.085, right=.90, top=.82, bottom=.15)
+    
+    fig.subplots_adjust(
+        left=.105,
+        right=.88,
+        top=.83,
+        bottom=.15
+    )
+
     _guardar(fig, dest, '11_pca_cotovelo', ext, dpi)
     _salvar_dados(pd.DataFrame({'componente': nums,
         'variancia_individual': ratio,
@@ -497,16 +682,39 @@ def _pca_histograma_1d(config, data, dest, ext, dpi, csv, op, *, origem='desenvo
             if not len(subset):
                 continue
             valores_hist, _ = np.histogram(subset, bins=edges, density=True)
-            ax.bar(mids, valores_hist, width=width * .93, color=cor,
-                   alpha=.38, edgecolor=cor, linewidth=.45,
-                   label=f'{nome} (n={len(subset):,})', zorder=2)
+
+
+
+            ax.bar(
+                mids, valores_hist,
+                width=width * .93,
+                color=cor,
+                alpha=.38,
+                edgecolor=cor,
+                linewidth=.45,
+                label=f'{nome} (n={len(subset)})',
+                zorder=2
+            )
+
+            
             if op.get('curvas_suavizadas_1d', True) and len(subset) >= 3:
                 curva = gaussian_filter1d(valores_hist, sigma=1.15, mode='nearest')
                 ax.plot(mids, curva, color=cor, linewidth=1.9, zorder=4)
-        legenda = 'Classes observadas' if colorir == 'classe_real' else 'Classes previstas (limiar OOF)'
-        ax.set_ylabel('Densidade por grupo (área = 1)')
-        nota = ('Histogramas normalizados por grupo; alturas não representam a prevalência. '
-                + legenda + '. Desenvolvimento F1–F9; F10 não utilizado.')
+
+
+
+
+
+        ax.set_ylabel(
+            'Densidade por classe (área = 1)',
+            fontsize=11,
+            labelpad=10
+        )
+
+
+
+
+        
     elif colorir == 'gaussiana_dominante':
         grupos = np.argmax(data['gamma'].to_numpy(), axis=1)
         _exigir(len(grupos) == len(x), 'Responsabilidades GMM nao alinhadas ao PCA.')
@@ -515,13 +723,14 @@ def _pca_histograma_1d(config, data, dest, ext, dpi, csv, op, *, origem='desenvo
             valores_hist, _ = np.histogram(subset, bins=edges, density=True)
             cor = plt.get_cmap('tab20')(int(k) % 20)
             ax.bar(mids, valores_hist, width=width * .93,
-                   color=cor, alpha=.23, label=f'G{k+1} (n={len(subset):,})')
+                   
+                   color=cor, alpha=.23, label=f'G{k+1} (n={len(subset)})')
+            
             if op.get('curvas_suavizadas_1d', True) and len(subset) >= 3:
                 ax.plot(mids, gaussian_filter1d(valores_hist, sigma=1.15, mode='nearest'),
                         color=cor, linewidth=1.5)
         ax.set_ylabel('Densidade por gaussiana (área = 1)')
-        nota = ('Grupos por argmax de responsabilidade; não são classes de fraude. '
-                'Desenvolvimento F1–F9; F10 não utilizado.')
+        
     elif colorir == 'risco':
         riscos = np.asarray(data['scores'], dtype=float)
         _exigir(len(riscos) == len(x) and np.isfinite(riscos).all() and
@@ -537,25 +746,88 @@ def _pca_histograma_1d(config, data, dest, ext, dpi, csv, op, *, origem='desenvo
         fig.colorbar(ScalarMappable(norm=norma, cmap=cor), ax=ax,
                      label='Risco médio estimado por faixa PC1')
         ax.set_ylabel('Frequência (observações)')
-        nota = ('Cor = risco médio por intervalo PC1; não representa classificação. '
-                'Desenvolvimento F1–F9; F10 não utilizado.')
+
     else:
         raise ValueError('Projecao PCA 1D: colorir_por desconhecido.')
 
+
+
+    # Media global da primeira componente principal
     if op.get('marcar_media_pc1_1d', True):
         media = float(x.mean())
-        if abs(media) < 1e-10:
-            media = 0.0  # Arredondamento numerico do PCA centrado.
-        ax.axvline(media, color='#253247', linestyle='--', linewidth=1.25,
-                   label=f'Média global PC1 = {media:.3f}')
-    ax.set_xlabel(f'PC1 (variância explicada: {ratio[0]:.1%})')
-    ax.set_title('12 — PCA 1D | Histograma da projeção em PC1')
-    ax.grid(axis='y', alpha=.16, linestyle=':')
-    ax.legend(loc='best', fontsize=8)
-    fig.subplots_adjust(bottom=.24, top=.87)
+        media_exibida = 0.0 if abs(media) < 0.00000005 else media
+
+        ax.axvline(
+            media,
+            color='#253247',
+            linestyle='--',
+            linewidth=1.25,
+            label=f'Média global da PC1 = {media_exibida:.7f}'
+        )
+
+    # Titulos e eixos
+    ax.set_xlabel(
+        f'PC1 (variância explicada = {float(ratio[0]):.7f})',
+        fontsize=11,
+        labelpad=10
+    )
+
+    ax.set_title(
+        'PCA 1D | Histograma da projeção em PC1',
+        fontsize=15,
+        pad=12
+    )
+
+    # Padronizacao numerica
+    from matplotlib.ticker import FuncFormatter
+
+    def sete_casas(valor, _pos):
+        valor = 0.0 if abs(valor) < 0.00000005 else valor
+        return f'{valor:.7f}'
+
+    ax.xaxis.set_major_formatter(FuncFormatter(sete_casas))
+
+    if colorir == 'risco':
+        # Neste modo o eixo vertical representa contagens inteiras.
+        ax.yaxis.set_major_formatter(
+            FuncFormatter(lambda valor, _pos: f'{valor:.0f}')
+        )
+    else:
+        ax.yaxis.set_major_formatter(FuncFormatter(sete_casas))
+
+    ax.tick_params(axis='both', labelsize=8.5)
+
+    ax.grid(
+        axis='y',
+        alpha=.16,
+        linestyle=':'
+    )
+
+    ax.legend(
+        loc='best',
+        fontsize=9,
+        frameon=True
+    )
+
+    fig.subplots_adjust(
+        left=.12,
+        right=.97,
+        bottom=.16,
+        top=.89
+    )
+
+    # Identificar dados simulados sem adicionar rodape no experimento real.
     if origem == 'simulado':
-        nota = 'PRÉVIA SINTÉTICA: dados simulados. ' + nota
-    fig.text(.5, .055, nota, ha='center', fontsize=8, color='#4a5568')
+        fig.text(
+            .5, .035,
+            'PRÉVIA SINTÉTICA: dados simulados.',
+            ha='center',
+            fontsize=8,
+            color='#4a5568'
+        )
+
+
+
     nome = '12_pca_projecao_PC1'
     _guardar(fig, dest, nome, ext, dpi)
     if csv:
@@ -774,7 +1046,7 @@ def _tsne_histograma_1d(config, data, dest, ext, dpi, csv, op, *, origem='desenv
             dens, _ = np.histogram(subset, bins=edges, density=True)
             cor = plt.get_cmap('tab20')(int(k) % 20)
             ax.bar(centros, dens, width=largura * .94,
-                   color=cor, alpha=.26, label=f'G{k+1} (n={len(subset):,})')
+                   color=cor, alpha=.26, label=f'G{k+1} (n={len(subset)})')
             if len(subset) >= 3 and op.get('curvas_suavizadas_1d', True):
                 ax.plot(centros, gaussian_filter1d(dens, 1.15, mode='nearest'),
                         color=cor, linewidth=1.6)

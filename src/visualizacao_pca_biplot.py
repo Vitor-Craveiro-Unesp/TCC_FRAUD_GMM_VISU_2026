@@ -124,35 +124,226 @@ def _circulo(ax, selecionadas):
     ax.set(xlim=(-1.25, 1.25), ylim=(-1.25, 1.25), xlabel='corr(X, PC1)', ylabel='corr(X, PC2)',
            title='Circulo de correlacoes (escala real)')
     ax.set_aspect('equal', adjustable='box'); ax.grid(alpha=.2)
+def _fig_observacoes_pc1(pc1, classes, config):
+    """Observacoes sobre PC1 com dispersao vertical apenas visual."""
 
+    pc1 = np.asarray(pc1, dtype=float).ravel()
+    classes = np.asarray(classes).ravel()
+
+    if (
+        len(pc1) == 0
+        or len(pc1) != len(classes)
+        or not np.isfinite(pc1).all()
+        or not np.isin(classes, [0, 1]).all()
+    ):
+        raise ValueError('Dados invalidos para observacoes sobre PC1.')
+
+    fig, ax = plt.subplots(figsize=(13.5, 5.2))
+
+    semente = int(config['experimento']['semente'])
+    rng = np.random.default_rng(semente)
+
+    # Dispersao vertical ficticia para evitar sobreposicao.
+    # Nao representa PC2.
+    jitter = rng.uniform(-0.11, 0.11, len(pc1))
+
+    estilos = config['visualizacao']['classes']
+
+    for classe, chave in ((0, 'legitima'), (1, 'fraude')):
+
+        mascara = classes == classe
+
+        if not mascara.any():
+            continue
+
+        estilo = estilos[chave]
+
+        ax.scatter(
+            pc1[mascara],
+            jitter[mascara],
+            color=estilo['cor'],
+            marker=estilo.get('marcador', 'o'),
+            s=estilo.get('tamanho', 16),
+            alpha=estilo.get('alpha', .5),
+            label=f"{estilo.get('nome', chave)} (n={int(mascara.sum())})",
+            zorder=3 if classe == 0 else 5,
+            rasterized=True
+        )
+
+    # Eixo horizontal verdadeiro da componente principal.
+    amplitude = max(float(np.ptp(pc1)), 0.001)
+    margem = amplitude * 0.025
+
+    ax.set_xlim(
+        float(pc1.min()) - margem,
+        float(pc1.max()) + margem
+    )
+
+    # O eixo vertical serve somente para espalhar os pontos.
+    ax.set_ylim(-0.14, 0.14)
+    ax.set_yticks([])
+    ax.set_ylabel('')
+
+    ax.set_xlabel(
+        'PC1',
+        fontsize=12,
+        labelpad=10
+    )
+
+    ax.set_title(
+        'OBSERVAÇÕES SOBRE PC1',
+        fontsize=17,
+        fontweight='bold',
+        pad=18
+    )
+
+    ax.grid(
+        axis='x',
+        linestyle=':',
+        alpha=.18
+    )
+
+    ax.legend(
+        loc='lower left',
+        fontsize=10,
+        frameon=True
+    )
+
+    ax.tick_params(axis='x', labelsize=10)
+
+    fig.subplots_adjust(
+        left=.055,
+        right=.98,
+        top=.87,
+        bottom=.17
+    )
+
+    return fig
 
 def _fig_1d(z, y, idx, config, selecao, variancia):
-    fig, (ax, av) = plt.subplots(2, 1, figsize=(11, 7), gridspec_kw={'height_ratios': [1.1, 1.0]})
-    rng = np.random.default_rng(int(config['experimento']['semente']))
-    jitter = rng.uniform(-.11, .11, len(idx))
-    for ids, e in _estilo(config, y, idx):
-        mask = np.isin(idx, ids)
-        ax.scatter(z[ids, 0], jitter[mask], color=e['cor'], marker=e['marcador'],
-                   s=e.get('tamanho', 16), alpha=e.get('alpha', .5), label=e['nome'])
-    ax.set(xlabel=f'PC1 ({variancia[0]:.2%} variancia explicada)',
-           ylabel='Jitter puramente visual (sem PC2)', title='Observacoes sobre PC1')
-    ax.set_yticks([]); ax.legend(loc='best'); ax.grid(axis='x', alpha=.2)
+    """Correlacoes de todas as variaveis preprocessadas com PC1."""
+
+    from matplotlib.ticker import FuncFormatter
+
     labels = list(selecao['variavel_preprocessada'])
-    vals = np.asarray(selecao['corr_PC1'], float)
-    yy = np.arange(len(labels))
-    av.axvline(0, color='grey', lw=1)
-    for pos, valor in zip(yy, vals):
+    valores = np.asarray(selecao['corr_PC1'], dtype=float)
+
+    n = len(labels)
+
+    if n == 0:
+        raise ValueError('Nenhuma variavel disponivel para o grafico.')
+
+    # Altura proporcional ao numero de variaveis
+    altura = max(7.0, 1.8 + 0.40 * n)
+
+    fig, av = plt.subplots(
+        figsize=(14.0, altura)
+    )
+
+    yy = np.arange(n)
+
+    # Linha central de correlacao zero
+    av.axvline(
+        0,
+        color='#78818e',
+        linewidth=1.0
+    )
+
+    # Setas de correlacao
+    for pos, valor in zip(yy, valores):
+
         cor = '#138276' if valor >= 0 else '#8051a8'
-        av.annotate('', xy=(valor, pos), xytext=(0, pos),
-                    arrowprops={'arrowstyle': '-|>', 'lw': 2.0, 'color': cor, 'mutation_scale': 12})
-        av.text(valor + (.04 if valor >= 0 else -.04), pos, f'{valor:+.2f}',
-                ha='left' if valor >= 0 else 'right', va='center', color=cor, fontsize=9)
-    av.set(yticks=yy, yticklabels=labels, xlim=(-1.18, 1.18),
-           xlabel='Correlacao Pearson de cada variavel com PC1',
-           title='Direcao e intensidade das variaveis em PC1')
-    av.invert_yaxis(); av.grid(axis='x', alpha=.2)
-    fig.suptitle('Biplot PCA 1D adaptado — desenvolvimento F1–F9', fontweight='bold')
-    fig.tight_layout(); return fig
+
+        av.annotate(
+            '',
+            xy=(valor, pos),
+            xytext=(0, pos),
+            arrowprops={
+                'arrowstyle': '-|>',
+                'lw': 1.9,
+                'color': cor,
+                'mutation_scale': 12
+            }
+        )
+
+        valor_exibido = (
+            0.0 if abs(valor) < 0.00000005 else valor
+        )
+
+        av.text(
+            valor + (.045 if valor >= 0 else -.045),
+            pos,
+            f'{valor_exibido:+.7f}',
+            ha='left' if valor >= 0 else 'right',
+            va='center',
+            color=cor,
+            fontsize=9
+        )
+
+    # Todas as variaveis aparecem no eixo vertical
+    av.set_yticks(
+        yy,
+        labels=labels
+    )
+
+    # Margem acima da primeira e abaixo da ultima seta
+    av.set_ylim(
+        n - .85,
+        -.85
+    )
+
+    # Espaco horizontal para os valores com 7 casas
+    av.set_xlim(
+        -1.40,
+        1.40
+    )
+
+    av.set_xlabel(
+        'Correlação de Pearson com PC1',
+        fontsize=11,
+        labelpad=12
+    )
+
+    av.set_xticks([-1, -.5, 0, .5, 1])
+
+    def numero7(valor, _pos):
+        valor = 0.0 if abs(valor) < 0.00000005 else valor
+        return f'{valor:.7f}'
+
+    av.xaxis.set_major_formatter(
+        FuncFormatter(numero7)
+    )
+
+    av.tick_params(
+        axis='x',
+        labelsize=9
+    )
+
+    av.tick_params(
+        axis='y',
+        labelsize=9,
+        length=0,
+        pad=8
+    )
+
+    av.set_axisbelow(True)
+    av.grid(axis='x', alpha=.20)
+
+    fig.suptitle(
+        'CORRELAÇÃO DAS VARIÁVEIS COM A PCA 1D',
+        fontsize=17,
+        fontweight='bold',
+        y=.995
+    )
+
+    fig.subplots_adjust(
+        left=.27,
+        right=.96,
+        top=1 - .66 / altura,
+        bottom=min(.13, .98 / altura)
+    )
+
+    return fig
 
 
 def _fig_2d(z, y, idx, config, selecionadas, variancia):
@@ -209,13 +400,200 @@ def _fig_3d(z, y, idx, config, selecionadas, variancia):
     fig.tight_layout(rect=[0,.07,1,.95]); return fig
 
 
+def _mapa_cores_variaveis_pca(variaveis):
+    """Define cores consistentes para as variaveis do PCA."""
+
+    from matplotlib.colors import to_hex
+
+    nomes = sorted(set(str(v) for v in variaveis))
+
+    paleta = []
+
+    for nome_paleta in ('tab20', 'tab20b', 'tab20c'):
+        cmap = plt.get_cmap(nome_paleta)
+
+        for cor in cmap.colors:
+            rgb = tuple(0.82 * canal for canal in cor[:3])
+            paleta.append(to_hex(rgb))
+
+    if len(nomes) > len(paleta):
+        raise ValueError(
+            'Quantidade de variaveis maior que a paleta disponivel.'
+        )
+
+    return dict(zip(nomes, paleta))
+
+
+def _fig_coeficientes_pc1(tabela):
+    """Exibe todos os coeficientes originais da combinacao linear da PC1."""
+
+    from matplotlib.ticker import FuncFormatter
+
+    exigidas = {
+        'variavel_preprocessada',
+        'coeficiente_PC1'
+    }
+
+    if not exigidas.issubset(tabela.columns) or tabela.empty:
+        raise ValueError(
+            'Tabela de coeficientes PC1 incompleta ou vazia.'
+        )
+
+    nomes = tabela['variavel_preprocessada'].astype(str).tolist()
+    valores = tabela['coeficiente_PC1'].to_numpy(dtype=float)
+
+    if not np.isfinite(valores).all():
+        raise ValueError('Coeficientes PC1 nao finitos.')
+
+    n = len(valores)
+
+    # Altura proporcional ao numero de variaveis
+    altura = max(7.0, 1.8 + 0.40 * n)
+
+    fig, ax = plt.subplots(
+        figsize=(14.0, altura)
+    )
+
+    posicoes = np.arange(n)
+
+    # Uma cor para cada variavel
+    mapa_cores = _mapa_cores_variaveis_pca(nomes)
+
+    # Referencia central
+    ax.axvline(
+        0,
+        color='#707a89',
+        linewidth=1.0
+    )
+
+    # Uma seta por variavel, com cor propria
+    for posicao, (nome, valor) in enumerate(zip(nomes, valores)):
+
+        cor = mapa_cores[nome]
+
+        ax.annotate(
+            '',
+            xy=(valor, posicao),
+            xytext=(0, posicao),
+            arrowprops={
+                'arrowstyle': '-|>',
+                'color': cor,
+                'lw': 2.0,
+                'mutation_scale': 12
+            }
+        )
+
+        valor_mostrado = (
+            0.0 if abs(valor) < 0.00000005 else valor
+        )
+
+        ax.text(
+            valor + (0.02 if valor >= 0 else -0.02),
+            posicao,
+            f'{valor_mostrado:+.7f}',
+            ha='left' if valor >= 0 else 'right',
+            va='center',
+            fontsize=8.5,
+            color=cor
+        )
+
+    # Limites proporcionais aos coeficientes
+    max_abs = max(
+        float(np.max(np.abs(valores))),
+        0.05
+    )
+
+    limite = max_abs * 1.45
+
+    ax.set_xlim(-limite, limite)
+
+    # Margens verticais para nao cortar as setas
+    ax.set_ylim(
+        n - 0.85,
+        -0.85
+    )
+
+    ax.set_yticks(
+        posicoes,
+        labels=nomes
+    )
+
+    ax.set_xlabel(
+        'Coeficiente na combinação linear da PC1',
+        fontsize=11,
+        labelpad=12
+    )
+
+    ax.set_title(
+        'COEFICIENTES DA COMBINAÇÃO LINEAR DA PC1',
+        fontsize=16,
+        fontweight='bold',
+        pad=20
+    )
+
+    # Sete casas decimais no eixo horizontal
+    def sete_casas(valor, _pos):
+        valor = (
+            0.0 if abs(valor) < 0.00000005
+            else valor
+        )
+        return f'{valor:.7f}'
+
+    ax.xaxis.set_major_formatter(
+        FuncFormatter(sete_casas)
+    )
+
+    ax.tick_params(
+        axis='x',
+        labelsize=9
+    )
+
+    ax.tick_params(
+        axis='y',
+        labelsize=9,
+        length=0,
+        pad=7
+    )
+
+    ax.grid(
+        axis='x',
+        linestyle=':',
+        alpha=.25
+    )
+
+    ax.set_axisbelow(True)
+
+    fig.subplots_adjust(
+        left=.30,
+        right=.96,
+        top=1 - .60 / altura,
+        bottom=min(.13, .95 / altura)
+    )
+
+    return fig
+
 def gerar(config, data, destino, ext, dpi, csv):
     """Produz grafico correspondente a dimensionalidade PCA e CSV completo."""
     x, coord, modelo, y = _entrada(data)
     opts = config['visualizacao']['graficos']['pca_biplot']
-    max_setas = int(opts.get('max_setas', 6))
+
+
     tab = tabela_correlacoes(data)
-    selecao = _principais(tab, max_setas)
+
+    if coord.shape[1] == 1:
+        # PCA 1D: exibir todas as variaveis preprocessadas
+        selecao = tab.sort_values(
+            ['relevancia_no_espaco', 'variavel_preprocessada'],
+            ascending=[False, True],
+            kind='stable'
+        )
+
+    else:
+        # PCA 2D/3D: preservar a selecao original
+        max_setas = int(opts.get('max_setas', 6))
+        selecao = _principais(tab, max_setas)
+
+
     limite = int(config['visualizacao']['geometria'].get('pontos_maximos_amostra', 20000))
     # Amostragem apenas visual; indices das observacoes permanecem alinhados.
     from src.visualizacao_geometrica import _amostra_plot
@@ -228,6 +606,104 @@ def gerar(config, data, destino, ext, dpi, csv):
               _fig_3d(z, y, idx, config, selecao, variancia))
     base = f'{PREFIXO}{dim}D'
     vis._salvar(figura, Path(destino) / f'{base}.{ext}', dpi=dpi)
+
+        # Grafico independente das observacoes sobre PC1.
+    if dim == 1:
+
+        figura_observacoes = _fig_observacoes_pc1(
+            z[idx, 0],
+            y[idx],
+            config
+        )
+
+        nome_observacoes = 'PCA_OBSERVACOES_PC1'
+
+        vis._salvar(
+            figura_observacoes,
+            Path(destino) / f'{nome_observacoes}.{ext}',
+            dpi=dpi
+        )
+
+        if csv:
+            tabela_observacoes = pd.DataFrame({
+                'indice_linha_desenvolvimento': np.asarray(coord.index)[idx],
+                'PC1': z[idx, 0],
+                'classe_real': y[idx]
+            })
+
+            vis._csv_protegido(
+                tabela_observacoes,
+                Path(destino) / f'{nome_observacoes}.csv'
+            )
+
+        # =====================================================
+    # NOVO GRAFICO: COEFICIENTES DA COMBINACAO LINEAR DA PC1
+    # Exclusivo do PCA 1D
+    # =====================================================
+
+    if dim == 1:
+
+        # Coeficientes reais do PCA ajustado
+        coeficientes = np.asarray(
+            modelo.components_[0],
+            dtype=float
+        )
+
+        if (
+            len(coeficientes) != len(x.columns)
+            or not np.isfinite(coeficientes).all()
+        ):
+            raise ValueError(
+                'Coeficientes PC1 invalidos ou desalinhados.'
+            )
+
+        # Preservar os nomes e valores originais
+        tabela_coeficientes = pd.DataFrame({
+            'variavel_preprocessada': list(x.columns),
+            'coeficiente_PC1': coeficientes
+        })
+
+        # Magnitude absoluta apenas para ordenacao
+        tabela_coeficientes['magnitude_absoluta'] = (
+            tabela_coeficientes['coeficiente_PC1'].abs()
+        )
+
+        tabela_coeficientes = tabela_coeficientes.sort_values(
+            ['magnitude_absoluta', 'variavel_preprocessada'],
+            ascending=[False, True],
+            kind='stable'
+        ).reset_index(drop=True)
+
+                # Registrar a cor de cada variavel para reutilizacao
+        # nas visualizacoes PCA 2D e 3D.
+        mapa_cores = _mapa_cores_variaveis_pca(x.columns)
+
+        tabela_coeficientes['cor_hex'] = (
+            tabela_coeficientes['variavel_preprocessada']
+            .map(mapa_cores)
+        )
+
+        # Criar o novo grafico
+        figura_coeficientes = _fig_coeficientes_pc1(
+            tabela_coeficientes
+        )
+
+        nome_coeficientes = 'PCA_COEFICIENTES_PC1'
+
+        # Salvar imagem independente
+        vis._salvar(
+            figura_coeficientes,
+            Path(destino) / f'{nome_coeficientes}.{ext}',
+            dpi=dpi
+        )
+
+        # Salvar coeficientes com precisao original
+        if csv:
+            vis._csv_protegido(
+                tabela_coeficientes,
+                Path(destino) / f'{nome_coeficientes}.csv'
+            )
+
     if csv:
         vis._csv_protegido(tab, Path(destino) / f'{base}_correlacoes.csv')
         coords = coord.iloc[idx].copy()
