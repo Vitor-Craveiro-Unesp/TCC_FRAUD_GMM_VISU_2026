@@ -14,6 +14,7 @@ def cfg():
     path=Path(__file__).resolve().parents[1]/'config_TCC_EXPERIMENTAL_V3_atualizado.yaml'
     c=yaml.safe_load(path.read_text(encoding='utf-8-sig'))
     c['visualizacao']['padrao']['figsize']=[5,3]
+    c['amostragem']['modo']='NORMAL'  # fixture sintetico, YAML do usuario preservado
     c['visualizacao']['padrao']['dpi']=60
     c['visualizacao']['geometria']['pontos_maximos_amostra']=150
     c['visualizacao']['graficos']['mapa_risco_fronteira']['resolucao_1d']=60
@@ -195,10 +196,10 @@ def test_planejar_nao_reajusta_ou_le_parquet(cfg, sint, tmp_path, monkeypatch):
 
 def test_bloqueia_fold10_nos_indices_originais(cfg, sint, tmp_path, monkeypatch):
     _,_,e=sint
-    exp=tmp_path/'experimento';(exp/'oof'/'predicoes').mkdir(parents=True)
+    exp=tmp_path/'experimento';(exp/'vencedor'/'oof').mkdir(parents=True)
     cid=e['id_candidato'];y=np.array([0,1,0,1,0,1,0,1,0],dtype=np.uint8)
     i=np.arange(9,dtype=np.int64)
-    np.savez_compressed(exp/'oof'/'predicoes'/f'{cid}.npz',
+    np.savez_compressed(exp/'vencedor'/'oof'/'predicoes.npz',
         linha_original=i,fold=np.arange(1,10,dtype=np.uint8))
     (exp/'manifesto.json').write_text('{"status":"concluido_06_03","tipo":"ensaio",'
         '"sha256_parquet":"hashbase","sha256_folds":"hashfolds",'

@@ -19,6 +19,7 @@ def config():
     raiz=Path(__file__).resolve().parents[1]
     cfg=yaml.safe_load((raiz/'config_TCC_EXPERIMENTAL_V3_atualizado.yaml').read_text(encoding='utf-8-sig'))
     cfg['visualizacao']['padrao'].update(dpi=55,figsize=[5,3])
+    cfg['amostragem']['modo']='NORMAL'  # sintese usa candidato NORMAL; YAML real permanece RUS
     cfg['visualizacao']['graficos']['mapa_risco_fronteira'].update(resolucao_2d=25,n_pontos_scatter=140)
     cfg['visualizacao']['geometria']['pontos_maximos_amostra']=200
     return cfg
@@ -65,10 +66,10 @@ def test_nao_inventa_segundo_pca(ranking):
 def test_npz_candidato_verifica_fold10_e_mesmos_ids(tmp_path,ranking):
     grade,escolha=ranking
     c=m._config_candidata_2d(grade,escolha)
-    pasta=tmp_path/'oof'/'predicoes';pasta.mkdir(parents=True)
+    pasta=tmp_path/'candidatos'/'K02_candidate_2d'/'oof';pasta.mkdir(parents=True)
     ids=np.arange(9,dtype=np.int64); y=np.array([0,1,0,1,0,1,0,1,0],dtype=np.int8)
     folds=np.arange(1,10,dtype=np.uint8)
-    destino=pasta/'candidate_2d.npz'
+    destino=pasta/'predicoes.npz'
     def salvar(fs,linhas=ids):
         np.savez_compressed(destino,linha_original=linhas,y_true=y,fold=fs,
                             fold_esperado=np.uint8(0),id_candidato=np.array('candidate_2d'))
@@ -114,7 +115,7 @@ def test_planejar_nao_cria_galeria_ou_treina(monkeypatch,tmp_path,config,ranking
     monkeypatch.setattr(m.geo,'_treinar_vencedor',lambda *args:pytest.fail('Planejar nunca treina'))
     summary=m.integrar(root,planejar=True)
     assert summary['id_candidato_2d_complementar']=='candidate_2d'
-    assert not (root/'visualizacao_consolidada').exists()
+    assert not (root/'vencedor'/'visualizacao'/'galeria').exists()
 
 
 def test_integrar_dois_graficos_sem_treinar_complementar(monkeypatch,tmp_path,config,ranking):
@@ -125,7 +126,7 @@ def test_integrar_dois_graficos_sem_treinar_complementar(monkeypatch,tmp_path,co
         config['visualizacao']['graficos'][name]['habilitar']=(name=='curva_pr')
     for name in list(geo.TIPOS):
         config['visualizacao']['graficos'][name]['habilitar']=(name=='painel_parametros_gaussianos')
-    od=root/'oof'/'graficos_gerados';gd=root/'teste_final'/'graficos_gerados'
+    od=root/'vencedor'/'visualizacao'/'oof';gd=root/'vencedor'/'visualizacao'/'geometria_desenvolvimento'
     od.mkdir(parents=True);gd.mkdir(parents=True)
     (od/'01_curva_precision_recall.png').write_bytes(b'png1')
     (gd/'09_painel_parametros_gaussianos.png').write_bytes(b'png2')
@@ -137,7 +138,7 @@ def test_integrar_dois_graficos_sem_treinar_complementar(monkeypatch,tmp_path,co
     r=m.integrar(root,planejar=False,complementar_2d=False)
     assert r['numero_imagens']==2
     assert 'nao_aplicavel'==r['complementar_2d']['situacao']
-    assert (root/'visualizacao_consolidada'/'index.html').is_file()
+    assert (root/'vencedor'/'visualizacao'/'galeria'/'index.html').is_file()
     r2=m.integrar(root,planejar=False,complementar_2d=False)
     assert r2['numero_imagens']==2
     assert (od/'01_curva_precision_recall.png').read_bytes()==b'png1'
@@ -165,7 +166,7 @@ def test_desenha_nuvens_e_risco_com_candidato_distinto(config,ranking,tmp_path):
 def test_manifesto_geometrico_invalido_impede_integracao(monkeypatch,tmp_path,config,ranking):
     grade,e=ranking;root=tmp_path/'exp';root.mkdir()
     monkeypatch.setattr(m.oof,'_ler_resultados',lambda _: (config,grade,e,np.array([]),np.array([])))
-    gd=root/'teste_final'/'graficos_gerados';gd.mkdir(parents=True)
+    gd=root/'vencedor'/'visualizacao'/'geometria_desenvolvimento';gd.mkdir(parents=True)
     (gd/'manifesto_geometria_07_02.json').write_text(json.dumps({'id_vencedor':'winner',
         'f10_utilizado':True,'origem':'desenvolvimento_F1_F9'}),encoding='utf-8')
     (root/'manifesto.json').write_text('{"status":"concluido_06_03","tipo":"ensaio"}',encoding='utf-8')
@@ -181,7 +182,7 @@ def test_galeria_inclui_painel_00(monkeypatch,tmp_path,config,ranking):
         config['visualizacao']['graficos'][nome]['habilitar']=(nome=='painel_score_composto')
     for nome in geo.TIPOS:
         config['visualizacao']['graficos'][nome]['habilitar']=(nome=='painel_parametros_gaussianos')
-    od=root/'oof'/'graficos_gerados';gd=root/'teste_final'/'graficos_gerados'
+    od=root/'vencedor'/'visualizacao'/'oof';gd=root/'vencedor'/'visualizacao'/'geometria_desenvolvimento'
     od.mkdir(parents=True);gd.mkdir(parents=True)
     (od/'00_painel_score_composto.png').write_bytes(b'fake-png-painel')
     (gd/'09_painel_parametros_gaussianos.png').write_bytes(b'fake-png-gmm')
@@ -193,9 +194,9 @@ def test_galeria_inclui_painel_00(monkeypatch,tmp_path,config,ranking):
     monkeypatch.setattr(m.oof,'_ler_resultados',lambda _: (config,grade,escolha,np.array([]),np.array([])))
     resultado=m.integrar(root,planejar=False,complementar_2d=False)
     assert resultado['numero_imagens']==2
-    painel=root/'visualizacao_consolidada'/'oof'/'00_painel_score_composto.png'
+    painel=root/'vencedor'/'visualizacao'/'galeria'/'oof'/'00_painel_score_composto.png'
     assert painel.read_bytes()==b'fake-png-painel'
-    html=(root/'visualizacao_consolidada'/'index.html').read_text()
+    html=(root/'vencedor'/'visualizacao'/'galeria'/'index.html').read_text()
     assert '00_painel_score_composto.png' in html
 
 
@@ -209,7 +210,7 @@ def test_galeria_gmm08_2d_aceita_comparativo_e_rejeita_arquivos_antigos(
     for nome in geo.TIPOS:
         config['visualizacao']['graficos'][nome]['habilitar'] = (
             nome == 'mapa_risco_fronteira')
-    gd = tmp_path/'teste_final'/'graficos_gerados'
+    gd = tmp_path/'vencedor'/'visualizacao'/'geometria_desenvolvimento'
     gd.mkdir(parents=True)
     old1 = gd/'GMM08_mapa_risco_2d_fixo.png'
     old2 = gd/'GMM08_mapa_risco_2d_mcc.png'

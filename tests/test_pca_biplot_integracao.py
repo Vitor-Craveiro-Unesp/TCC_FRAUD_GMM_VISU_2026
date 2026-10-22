@@ -124,7 +124,7 @@ def test_galeria_07_03_inclui_biplot_2d_sem_retreinar(tmp_path, config, monkeypa
                  'configuracao':{'metodo':'PCA','reducao':{'n_components':2}}}
     exp = tmp_path/'ensaio_sintetico'; exp.mkdir()
     (exp/'manifesto.json').write_text(json.dumps({'status':'concluido_06_03','tipo':'ensaio'}))
-    a=exp/'oof'/'graficos_gerados';bpath=exp/'teste_final'/'graficos_gerados'
+    a=exp/'vencedor'/'visualizacao'/'oof';bpath=exp/'vencedor'/'visualizacao'/'geometria_desenvolvimento'
     a.mkdir(parents=True);bpath.mkdir(parents=True)
     (a/'01_curva_precision_recall.png').write_bytes(b'png exemplo')
     (bpath/'PCA_BIPLOT_2D.png').write_bytes(b'png biplot')
@@ -135,7 +135,7 @@ def test_galeria_07_03_inclui_biplot_2d_sem_retreinar(tmp_path, config, monkeypa
     resumo = integ.integrar(exp, complementar_2d=False)
     assert resumo['numero_imagens'] == 2
     assert 'pca_biplot' in resumo['tipos_geometricos']
-    assert (exp/'visualizacao_consolidada'/'geometria_desenvolvimento'/'PCA_BIPLOT_2D.png').is_file()
-    html = (exp/'visualizacao_consolidada'/'index.html').read_text(encoding='utf-8')
+    assert (exp/'vencedor'/'visualizacao'/'galeria'/'geometria_desenvolvimento'/'PCA_BIPLOT_2D.png').is_file()
+    html = (exp/'vencedor'/'visualizacao'/'galeria'/'index.html').read_text(encoding='utf-8')
     assert 'PCA_BIPLOT_2D.png' in html
     assert resumo['f10_utilizado'] is False

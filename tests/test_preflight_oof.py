@@ -126,7 +126,7 @@ def test_diagnostico_realiza_apenas_leituras(tmp_path,monkeypatch):
     assert not diag['iniciou_treinamento'] and not diag['teste_f10_utilizado_em_fit']
     assert diag['desenvolvimento_linhas']==270
     assert diag['f10_linhas']==30
-    assert diag['quantidade_candidatos']==4 and diag['total_rodadas']==36
+    assert diag['quantidade_candidatos']==3 and diag['total_rodadas']==27
     assert diag['git_commit']=='7506620'
 
 
@@ -154,7 +154,7 @@ def test_preflight_preserva_configuracao_e_nao_inicia_oof(tmp_path,monkeypatch):
     from src import orquestracao_oof as o
     monkeypatch.setattr(o,'executar_grade',lambda *a,**kw:(_ for _ in ()).throw(AssertionError('Nunca iniciar modelo')))
     r=p.main(['--amostra','180','--json'],raiz=tmp_path)
-    assert r['total_rodadas']==36 and r['iniciou_treinamento'] is False
+    assert r['total_rodadas']==27 and r['iniciou_treinamento'] is False
     assert not (tmp_path/'outputs').exists()
 
 

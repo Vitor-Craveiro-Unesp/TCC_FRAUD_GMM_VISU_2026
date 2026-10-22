@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 import yaml
 
+from src import estrutura_saida as layout
 from src.orquestracao_oof import (
     validar_operacao, _chave, _chave_execucao, _salvar_npz, _ler_npz,
     _verificar_tabela, _salvar_json, _selecionar_posicoes,
@@ -139,8 +140,8 @@ def test_criar_e_retomar_manifesto(tmp_path,config):
     pasta,m,retomada=_abrir_execucao(tmp_path,config,chave,ensaio=True)
     assert not retomada
     assert (pasta/'configuracao.yaml').exists()
-    assert (pasta/'oof'/'cache').exists()
-    assert (pasta/'teste_final'/'graficos_gerados').exists()
+    assert (pasta/'candidatos').exists()
+    assert layout.teste_final(pasta).exists()
     pasta2,m2,ret2=_abrir_execucao(tmp_path,config,chave,ensaio=True)
     assert not retomada and ret2 and pasta2==pasta
     assert m2['chave_execucao']==chave
@@ -173,11 +174,11 @@ def test_execucao_grid_integral_e_retomada(tmp_path,config,dados,monkeypatch):
     result=executar_grade(df,fdev,orig,f,config,pasta,manifest,ensaio=False)
     assert result['status']=='selecionado_em_oof_integral'
     assert result['teste_final_usado'] is False
-    assert len(list((pasta/'oof'/'cache').glob('*.npz')))==9
-    assert len(list((pasta/'oof'/'predicoes').glob('*.npz')))==1
-    assert len(list((pasta/'oof'/'metricas').glob('*.json')))==1
-    assert len(pd.read_csv(pasta/'oof'/'resultados_grade.csv'))==1
-    assert not list((pasta/'teste_final').rglob('*.npz'))
+    assert len(list((pasta/'candidatos').glob('*/oof/cache/*.npz')))==9
+    assert len(list((pasta/'candidatos').glob('*/oof/predicoes.npz')))==1
+    assert len(list((pasta/'candidatos').glob('*/metricas/metricas.json')))==1
+    assert len(pd.read_csv(layout.metricas_vencedor(pasta)/'resultados_grade.csv'))==1
+    assert not list(layout.teste_final(pasta).rglob('*.npz'))
 
     # Os resultados existentes precisam ser reaproveitados sem tocar o motor.
     from src import orquestracao_oof as o
@@ -193,7 +194,7 @@ def test_execucao_amostral_nao_gera_metricas_oficiais(tmp_path,config,dados):
     pasta,m,_=_abrir_execucao(tmp_path,config,'AMOSTRA',ensaio=True)
     result=executar_grade(parcial,fdev[selecionados],orig[selecionados],f,config,pasta,m,ensaio=True)
     assert result['status']=='selecionado_em_ensaio'
-    meta=json.loads(next((pasta/'oof'/'metricas').glob('*.json')).read_text())
+    meta=json.loads(next((pasta/'candidatos').glob('*/metricas/metricas.json')).read_text())
     assert meta['tipo_avaliacao']=='OOF_AMOSTRAL_NAO_OFICIAL'
 
 
@@ -202,7 +203,10 @@ def test_cache_corrompido_nao_e_silenciado(tmp_path,config,dados):
     pasta,m,_=_abrir_execucao(tmp_path,config,'TESTE_CORROMPIDO',ensaio=False)
     from src.validacao_oof import grade_candidatos_oof
     cid=_chave(next(grade_candidatos_oof(config)))[:14]
-    cache=pasta/'oof'/'cache'/f'{cid}_F01.npz'
+    from src.validacao_oof import grade_candidatos_oof
+    candidato=next(grade_candidatos_oof(config))
+    cache=layout.candidato(pasta,cid,candidato)/'oof'/'cache'/'F01.npz'
+    cache.parent.mkdir(parents=True,exist_ok=True)
     cache.write_text('nao e npz')
     with pytest.raises(Exception):
         executar_grade(df,fdev,orig,f,config,pasta,m,ensaio=False)
@@ -224,7 +228,7 @@ def test_retomada_apos_interrupcao_no_meio_de_um_candidato(tmp_path,config,dados
     with pytest.raises(RuntimeError,match='Interrupcao simulada'):
         executar_grade(df,fdev,orig,f,config,pasta,manifest,ensaio=False)
     assert visitas==[1,2]
-    assert len(list((pasta/'oof'/'cache').glob('*.npz')))==1
+    assert len(list((pasta/'candidatos').glob('*/oof/cache/*.npz')))==1
 
     def retomar_sem_recalcular_f1(*args):
         if args[-1]==1: raise AssertionError('F1 ja existia no cache')
@@ -232,4 +236,4 @@ def test_retomada_apos_interrupcao_no_meio_de_um_candidato(tmp_path,config,dados
     monkeypatch.setattr(o,'prever_fold_oof',retomar_sem_recalcular_f1)
     resultado=executar_grade(df,fdev,orig,f,config,pasta,manifest,ensaio=False)
     assert resultado['status']=='selecionado_em_oof_integral'
-    assert len(list((pasta/'oof'/'cache').glob('*.npz')))==9
+    assert len(list((pasta/'candidatos').glob('*/oof/cache/*.npz')))==9

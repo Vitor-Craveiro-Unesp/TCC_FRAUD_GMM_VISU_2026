@@ -37,10 +37,10 @@ def p(config, k=2):
     return {**next(grade_gmm(config)), "n_components": k}
 
 
-def test_grade_yaml_k1_k2(config):
+def test_grade_yaml_k2_k4_k6(config):
     grade = list(grade_gmm(config))
-    assert [d["n_components"] for d in grade] == [1, 2]
-    assert len(grade) == 2
+    assert [d["n_components"] for d in grade] == [2, 4, 6]
+    assert len(grade) == 3
 
 
 def test_grade_produto_cartesiano_sem_vetor_visualizacao(config):
@@ -198,5 +198,5 @@ def test_NaN_validacao_falha(config, dados):
 def test_grade_copias_independentes(config):
     grade = list(grade_gmm(config))
     grade[0]["n_components"] = 100
-    assert grade[1]["n_components"] == 2
-    assert config["gmm"]["n_components"] == [1, 2]
+    assert grade[1]["n_components"] == 4
+    assert config["gmm"]["n_components"] == [2, 4, 6]

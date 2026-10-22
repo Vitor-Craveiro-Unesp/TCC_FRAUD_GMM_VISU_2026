@@ -5,7 +5,7 @@
 
 Refaz UM ajuste final do vencedor no MESMO desenvolvimento (F1..F9) do
 experimento/ensaio. Nao lê F10 para treino, graficos ou selecao. A pasta
-"teste_final/graficos_gerados" segue o YAML e contem diagnósticos do
+"vencedor/visualizacao/geometria_desenvolvimento" contem diagnósticos do
 modelo ajustado no desenvolvimento; NAO sao metricas ou graficos de F10.
 """
 from __future__ import annotations
@@ -27,6 +27,7 @@ from threadpoolctl import threadpool_limits
 
 from src import orquestracao_oof as orq
 from src import visualizacao_oof as vis
+from src import estrutura_saida as layout
 from src.amostragem import selecionar_indices_gmm
 from src.preprocessing import selecionar_features, EncodersPorSufixo, ImputadorPadronizador
 from src.reducao import RedutorPCA
@@ -94,7 +95,7 @@ def _selecao(experimento, raiz):
     _exigir(manifesto.get('tipo') in ('ensaio','oficial'), 'Tipo de experimento nao reconhecido.')
     _exigir(not escolha.get('teste_final_usado'), 'F10 ja utilizado na selecao.')
     cid = escolha['id_candidato']
-    caminho = experimento/'oof'/'predicoes'/f'{cid}.npz'
+    caminho = layout.predicoes_vencedor(experimento)
     with np.load(caminho,allow_pickle=False) as a:
         ids = np.asarray(a['linha_original'],dtype=np.int64)
         f_oof = np.asarray(a['fold'],dtype=np.uint8)
@@ -1354,7 +1355,7 @@ def executar(experimento, *, raiz=None, somente_planejar=False):
     cand=escolha['configuracao'];jobs=int(cfg['execucao'].get('n_jobs',1))
     with threadpool_limits(limits=1 if jobs == -1 else max(1,jobs)):
         data=_treinar_vencedor(df,cfg,escolha)
-    destino=experimento/cfg['saidas']['pastas']['teste_final']/cfg['saidas']['pastas']['graficos']
+    destino=layout.imagens_geometria(experimento)
     destino.mkdir(parents=True,exist_ok=True)
     ext,dpi,csv=_estilo(cfg)
     from src import visualizacao_gmm07 as sensibilidade

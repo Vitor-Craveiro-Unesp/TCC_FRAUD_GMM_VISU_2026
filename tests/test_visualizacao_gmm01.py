@@ -94,8 +94,8 @@ def test_galeria_exige_numero_exato_de_marginais(tmp_path,monkeypatch):
     for nome in cfg['visualizacao']['graficos']:
         cfg['visualizacao']['graficos'][nome]['habilitar']=(nome=='densidades_marginais')
     exp=tmp_path/'experimento'
-    (exp/'teste_final'/'graficos_gerados').mkdir(parents=True)
-    dest=exp/'teste_final'/'graficos_gerados'
+    (exp/'vencedor'/'visualizacao'/'geometria_desenvolvimento').mkdir(parents=True)
+    dest=exp/'vencedor'/'visualizacao'/'geometria_desenvolvimento'
     choice={'configuracao':{'reducao':{'n_components':2},'metodo':'PCA'},'id_candidato':'sint'}
     # Planejar apenas verifica, sem treinar nem ler F10.
     monkeypatch.setattr(galeria.oof,'_ler_resultados',lambda _: (cfg,None,choice,None,None))

@@ -19,7 +19,9 @@ from src.probabilidade import calcular_probabilidades, PreditorProbabilisticoGMM
 @pytest.fixture
 def cfg():
     with (ROOT / "config_TCC_EXPERIMENTAL_V3_atualizado.yaml").open(encoding="utf-8-sig") as arq:
-        return yaml.safe_load(arq)
+        config = yaml.safe_load(arq)
+    config["gmm"]["n_components"] = [1, 2] # componentes sinteticos nos testes, sem afetar YAML real
+    return config
 
 
 @pytest.fixture

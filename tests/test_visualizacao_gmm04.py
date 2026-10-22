@@ -83,10 +83,10 @@ def test_galeria_exige_gmm04_com_dimensao_correta(cfg,tmp_path,d):
         cfg['visualizacao']['graficos'][nome]['habilitar']=False
     for nome in list(geo.TIPOS):
         cfg['visualizacao']['graficos'][nome]['habilitar']=(nome=='regioes_dominancia')
-    exp=tmp_path/'ensaio'; (exp/'teste_final'/'graficos_gerados').mkdir(parents=True)
+    exp=tmp_path/'ensaio'; (exp/'vencedor'/'visualizacao'/'geometria_desenvolvimento').mkdir(parents=True)
     grade=[]
     esc={'id_candidato':'teste','configuracao':{'metodo':'PCA','reducao':{'n_components':d}}}
-    pasta=exp/'teste_final'/'graficos_gerados'
+    pasta=exp/'vencedor'/'visualizacao'/'geometria_desenvolvimento'
     (pasta/'GMM04_dominancia_1d.png').write_bytes(b'png')
     _,_,_,_,_,pronto=galeria._verificar_geracoes(exp,cfg,esc,executar=False)
     assert pronto==(d==1)

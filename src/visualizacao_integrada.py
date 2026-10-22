@@ -29,6 +29,7 @@ from threadpoolctl import threadpool_limits
 
 from src import visualizacao_geometrica as geo
 from src import visualizacao_oof as oof
+from src import estrutura_saida as layout
 
 FORMATS = ('.png', '.pdf', '.svg')
 NOMES_GEO = dict(geo.NUM)
@@ -112,7 +113,7 @@ def _config_candidata_2d(grade, escolha):
 
 
 def _validar_npz_candidato(experimento,candidato,ids,y_oof,folds):
-    caminho=experimento/'oof'/'predicoes'/f'{candidato["id_candidato"]}.npz'
+    caminho=layout.candidato(experimento,candidato['id_candidato'],candidato['configuracao'])/'oof'/'predicoes.npz'
     _exigir(caminho.is_file(),f'Predicoes do candidato 2D ausentes: {caminho}')
     with np.load(caminho,allow_pickle=False) as arq:
         _exigir({'linha_original','y_true','fold','id_candidato','fold_esperado'}.issubset(arq.files),
@@ -220,8 +221,8 @@ def _desenhar_complementar(config,data,escolha_complementar,arquivo):
 
 
 def _verificar_geracoes(experimento,config,escolha,*,executar):
-    oof_dir=experimento/'oof'/'graficos_gerados'
-    geo_dir=experimento/'teste_final'/'graficos_gerados'
+    oof_dir=layout.imagens_oof(experimento)
+    geo_dir=layout.imagens_geometria(experimento)
     ext='.'+config['visualizacao']['padrao'].get('formato','png').lower()
     _exigir(ext in FORMATS,'Extensao de grafico desconhecida.')
     oof_ativos=[nome for nome in oof.ARQUIVOS if oof._ativado(config,nome)]
@@ -277,7 +278,7 @@ def _complementar(experimento,config,grade,escolha,*,executar):
     candidato=_config_candidata_2d(grade,escolha)
     if candidato is None:
         return {'situacao':'nao_aplicavel','motivo':'Vencedor ja e 2D/3D, nao e PCA ou nao ha candidato PCA=2 no OOF.'}
-    destino=experimento/'visualizacao_consolidada'/'complementar_2d'
+    destino=layout.galeria(experimento)/'complementar_2d'
     ext='.'+config['visualizacao']['padrao'].get('formato','png').lower()
     arquivo=destino/('16_mapa_complementar_PCA2_GMM'+str(candidato['configuracao']['gmm']['n_components'])+ext)
     arquivo_meta=destino/'manifesto_complementar_2d.json'
@@ -390,7 +391,7 @@ def integrar(experimento, *, planejar=False, complementar_2d=True):
         print('F10: nao lido; nenhum ajuste realizado.')
         return resumo
     adicional= _complementar(experimento,config,grade,escolha,executar=True) if comp else {'situacao':'nao_aplicavel'}
-    base=experimento/'visualizacao_consolidada'
+    base=layout.galeria(experimento)
     salvos=[]
     for origem,secao in ((od,'oof'),(gd,'geometria_desenvolvimento')):
         if not origem.is_dir():continue

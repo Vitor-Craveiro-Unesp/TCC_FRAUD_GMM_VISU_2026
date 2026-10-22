@@ -35,7 +35,7 @@ dados:
   # 1.0 = desenvolvimento completo; 0.1 = 10% apenas para ensaio local.
   # Se fracao_base < 1.0, amostrar SOMENTE o desenvolvimento
   # DEPOIS de reservar o teste final. O teste nunca e subamostrado.
-  fracao_base: 1.0
+  fracao_base: 0.1
 
 # ============================================================
 # DIVISAO DOS DADOS / TESTE FINAL INTACTO
@@ -103,12 +103,12 @@ preprocessamento:
 # ============================================================
 amostragem:
   # Uma opcao "NORMAL" ou "RUS"; para comparar, usar ["NORMAL", "RUS"].
-  modo: "NORMAL"                    # Opcoes: "NORMAL", "RUS".
+  modo: "RUS"                    # Opcoes: "NORMAL", "RUS".
 
   # Usada somente se modo incluir "RUS".
   # Ex.: 32 = ate 32 negativas por fraude, mantendo todas as fraudes.
   # Pode variar: [16, 32, 64].
-  razao_negativos_positivos: 32
+  razao_negativos_positivos: 16
   aplicar_somente_treino: true
 
   # Com RUS, ajustar o GMM na amostra reduzida SEM rotulos.
@@ -137,7 +137,7 @@ reducao:
 pca:
   # Inteiro positivo <= quantidade de features apos encoding.
   # Ex.: 2 ou [2, 4, 8, 16]. "mle" requer condicoes especificas.
-  n_components: [2, 3]
+  n_components: [1]
 
   # Opcional: manter variancias ou branquear componentes.
   # Ex.: false ou [false, true].
@@ -193,7 +193,7 @@ tsne:
 # ============================================================
 gmm:
   # 1 = uma gaussiana; 2 = duas; [1, 2, 4, 8] = grade de K.
-  n_components: [1, 2]
+  n_components: [2,4,6]
 
   # Opcoes: "full", "diag", "tied", "spherical".
   # "diag" geralmente economiza memoria/tempo em base grande.
@@ -291,12 +291,18 @@ saidas:
   padrao_pasta: "experimento_{metodo}_gmm_{datahora_fim}"
   timezone: "America/Sao_Paulo"
 
-  # DUAS pastas principais obrigatorias dentro do experimento.
-  # Cada pasta tera a sua propria pasta de graficos gerados.
+  # Layout 2: um candidato por pasta e uma pasta autocontida do vencedor.
+  # Graficos geometricos do desenvolvimento NAO pertencem ao teste F10.
+  # 'teste_final' permanece reservado para a avaliacao independente futura.
   pastas:
+    candidatos: "candidatos"
+    vencedor: "vencedor"
+    metricas: "metricas"
     oof: "oof"
+    visualizacao: "visualizacao"
+    geometria: "geometria_desenvolvimento"
+    galeria: "galeria"
     teste_final: "teste_final"
-    graficos: "graficos_gerados"
 
   salvar_configuracao: true
   salvar_metricas: true
@@ -315,8 +321,8 @@ saidas:
 # TESTE FINAL usa predicoes de teste do modelo congelado.
 # Analises geometricas (PCA, t-SNE, gaussianas) usam EXCLUSIVAMENTE
 # o modelo final ajustado nos dados de DESENVOLVIMENTO (90%).
-# Elas sao salvas em teste_final/graficos_gerados, com essa origem
-# indicada em titulo/metadata; o teste final NAO ajusta esse modelo.
+# Elas sao salvas em vencedor/visualizacao/geometria_desenvolvimento/,
+# com essa origem indicada em titulo/metadata; o F10 nao e utilizado.
 # Graficos incompatíveis com o metodo/dimensionalidade sao omitidos
 # e registrados no manifesto (nao gerar placeholders enganosos).
 # ============================================================

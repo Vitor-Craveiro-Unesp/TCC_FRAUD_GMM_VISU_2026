@@ -3,7 +3,7 @@ r"""Gera visualizacoes exploratorias do ensaio OOF concluido, sem retreinar.
 Uso (na raiz do projeto):
     python .\tests\gerar_graficos_ensaio_oof.py outputs\ensaio_pca_gmm_20261017_195252
 
-Saidas: <experimento>/oof/graficos_gerados/ensaio_*.png
+Saidas: <experimento>/vencedor/visualizacao/oof/ensaio_*.png
 Nunca carrega dados do F10 nem sobrescreve arquivos existentes.
 """
 from __future__ import annotations
@@ -102,7 +102,7 @@ def matriz(y, p, limiar, titulo, destino):
 def vencedor_oof(df, pasta, saidas):
     win = df.iloc[0]
     cid = str(win["id_candidato"])
-    arq = pasta / "oof" / "predicoes" / f"{cid}.npz"
+    arq = pasta / "vencedor" / "oof" / "predicoes.npz"
     if not arq.is_file():
         raise FileNotFoundError(f"Predicoes OOF do candidato vencedor ausentes: {arq}")
     with np.load(arq, allow_pickle=False) as z:
@@ -161,7 +161,7 @@ def main():
     parser.add_argument("experimento", type=Path, help="Pasta do ensaio OOF ja concluido")
     args = parser.parse_args()
     pasta = args.experimento.resolve()
-    arquivo = pasta / "oof" / "resultados_grade.csv"
+    arquivo = pasta / "vencedor" / "metricas" / "resultados_grade.csv"
     if not arquivo.is_file():
         raise FileNotFoundError(f"Nao encontrei {arquivo}")
     tabela = pd.read_csv(arquivo)
@@ -169,7 +169,7 @@ def main():
     if not obrigatorias.issubset(tabela.columns):
         raise ValueError(f"Colunas ausentes no CSV: {obrigatorias - set(tabela.columns)}")
     tabela = tabela.sort_values(['score','ap'], ascending=False, kind='stable').reset_index(drop=True)
-    destino = pasta / "oof" / "graficos_gerados"
+    destino = pasta / "vencedor" / "visualizacao" / "oof"
     comparar_grade(tabela, destino)
     vencedor_oof(tabela, pasta, destino)
     print(f"\n9 graficos de diagnostico OOF em: {destino}")

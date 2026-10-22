@@ -16,7 +16,9 @@ from src.reducao import RedutorPCA, grade_pca
 @pytest.fixture
 def config():
     with (ROOT / "config_TCC_EXPERIMENTAL_V3_atualizado.yaml").open(encoding="utf-8-sig") as f:
-        return yaml.safe_load(f)
+        config=yaml.safe_load(f)
+    config["pca"]["n_components"]=[2,3]  # grade sintetica do teste
+    return config
 
 
 @pytest.fixture

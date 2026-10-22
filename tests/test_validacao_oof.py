@@ -18,7 +18,11 @@ from src.validacao_oof import (
 
 @pytest.fixture
 def cfg():
-    return yaml.safe_load((ROOT / "config_TCC_EXPERIMENTAL_V3_atualizado.yaml").read_text(encoding="utf-8-sig"))
+    cfg=yaml.safe_load((ROOT / "config_TCC_EXPERIMENTAL_V3_atualizado.yaml").read_text(encoding="utf-8-sig"))
+    cfg["pca"]["n_components"]=[2,3]
+    cfg["gmm"]["n_components"]=[1,2]
+    cfg["amostragem"]["modo"]="NORMAL"
+    return cfg
 
 
 @pytest.fixture

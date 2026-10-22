@@ -34,7 +34,8 @@ def experimento(tmp_path):
     config['visualizacao']['graficos']['distribuicao_probabilidades']['bins']=10
     config['visualizacao']['graficos']['comparacao_hiperparametros']['maximo_configuracoes']=3
     root=tmp_path/'ensaio_pca_gmm_20261017_195252'
-    pasta=root/'oof';(pasta/'predicoes').mkdir(parents=True)
+    pasta=root/'vencedor'/'metricas';pasta.mkdir(parents=True)
+    (root/'vencedor'/'oof').mkdir(parents=True)
     (root/'configuracao.yaml').write_text(yaml.safe_dump(config,allow_unicode=True),encoding='utf-8')
     rng=np.random.default_rng(42)
     n=360
@@ -56,7 +57,7 @@ def experimento(tmp_path):
     escolha={'id_candidato':cid,'configuracao':cand,'limiar_mcc_oof':limiar,
              'score_oof':score,'status':'selecionado_em_ensaio','teste_final_usado':False}
     (pasta/'melhor_configuracao.json').write_text(json.dumps(escolha),encoding='utf-8')
-    np.savez_compressed(pasta/'predicoes'/f'{cid}.npz',
+    np.savez_compressed(root/'vencedor'/'oof'/'predicoes.npz',
         y_true=y,prob_fraude=p,fold=np.tile(np.arange(1,10,dtype=np.uint8),n//9),
         linha_original=np.arange(n,dtype=np.int64),id_candidato=np.array(cid),
         fold_esperado=np.array(0,dtype=np.uint8))
@@ -65,7 +66,7 @@ def experimento(tmp_path):
 
 def test_gera_sete_tipos_arquivos_e_csv(experimento):
     resumo=gerar_graficos_oof(experimento)
-    pasta=experimento/'oof'/'graficos_gerados'
+    pasta=experimento/'vencedor'/'visualizacao'/'oof'
     assert len(resumo['tipos_gerados'])==7
     assert len(list(pasta.glob('*.png')))==7
     assert len(list(pasta.glob('*.csv')))==9  # PR e MCC incluem CSVs adicionais de pontos operacionais
@@ -75,12 +76,12 @@ def test_gera_sete_tipos_arquivos_e_csv(experimento):
 
 
 def test_idempotente_e_preserva_fontes(experimento):
-    fontes=[experimento/'configuracao.yaml',experimento/'oof'/'resultados_grade.csv',
-            experimento/'oof'/'melhor_configuracao.json',
-            experimento/'oof'/'predicoes'/'abc012.npz']
+    fontes=[experimento/'configuracao.yaml',experimento/'vencedor'/'metricas'/'resultados_grade.csv',
+            experimento/'vencedor'/'metricas'/'melhor_configuracao.json',
+            experimento/'vencedor'/'oof'/'predicoes.npz']
     antes={str(f):f.read_bytes() for f in fontes}
     gerar_graficos_oof(experimento)
-    png=experimento/'oof'/'graficos_gerados'/'01_curva_precision_recall.png'
+    png=experimento/'vencedor'/'visualizacao'/'oof'/'01_curva_precision_recall.png'
     bytes_png=png.read_bytes()
     gerar_graficos_oof(experimento)
     assert png.read_bytes()==bytes_png
@@ -95,11 +96,11 @@ def test_respeita_flag_yaml_desativada(experimento):
     resumo=gerar_graficos_oof(experimento)
     assert len(resumo['tipos_gerados'])==6
     assert 'curva_mcc' in resumo['tipos_omitidos_por_yaml']
-    assert not (experimento/'oof'/'graficos_gerados'/'02_mcc_por_limiar.png').exists()
+    assert not (experimento/'vencedor'/'visualizacao'/'oof'/'02_mcc_por_limiar.png').exists()
 
 
 def test_bloqueia_f10(experimento):
-    arq=experimento/'oof'/'predicoes'/'abc012.npz'
+    arq=experimento/'vencedor'/'oof'/'predicoes.npz'
     with np.load(arq) as z:
         data={key:z[key] for key in z.files}
     data['fold'][0]=10
@@ -109,7 +110,7 @@ def test_bloqueia_f10(experimento):
 
 
 def test_bloqueia_vencedor_inconsistente(experimento):
-    arquivo=experimento/'oof'/'melhor_configuracao.json'
+    arquivo=experimento/'vencedor'/'metricas'/'melhor_configuracao.json'
     escolha=json.loads(arquivo.read_text())
     escolha['id_candidato']='xyz999'
     arquivo.write_text(json.dumps(escolha))
@@ -127,19 +128,19 @@ def test_mcc_vetorizado_inclui_empates_sem_quebrar():
 
 def test_painel_00_valores_corretos_e_fontes_preservadas(experimento):
     import numpy as np
-    pasta=experimento/'oof'/'predicoes'/'abc012.npz'
+    pasta=experimento/'vencedor'/'oof'/'predicoes.npz'
     with np.load(pasta,allow_pickle=False) as arq:
         y=arq['y_true'];p=arq['prob_fraude']
-    grade=pd.read_csv(experimento/'oof'/'resultados_grade.csv')
+    grade=pd.read_csv(experimento/'vencedor'/'metricas'/'resultados_grade.csv')
     vencedor=grade.iloc[0]
-    escolha=json.loads((experimento/'oof'/'melhor_configuracao.json').read_text())
+    escolha=json.loads((experimento/'vencedor'/'metricas'/'melhor_configuracao.json').read_text())
     numeros=_numeros_painel_00(y,p,vencedor,escolha)
     assert np.isclose(numeros['mcc_01'],(numeros['mcc_bruto']+1)/2)
     assert np.isclose(numeros['logloss_01'],np.exp(-numeros['logloss_bruto']))
     assert np.isclose(numeros['score_composto'],
         (numeros['ap']+numeros['mcc_01']+numeros['logloss_01'])/3)
     gerar_graficos_oof(experimento)
-    saida=experimento/'oof'/'graficos_gerados'
+    saida=experimento/'vencedor'/'visualizacao'/'oof'
     assert (saida/'00_painel_score_composto.png').stat().st_size>1000
     csv=pd.read_csv(saida/'00_painel_score_composto.csv')
     assert list(csv['indicador'])==['AP','MCC','LogLoss','Score composto']
@@ -155,7 +156,7 @@ def test_yaml_painel_desativado_nao_gera_painel(experimento):
     cfg['visualizacao']['graficos']['painel_score_composto']['habilitar']=False
     arq.write_text(yaml.safe_dump(cfg),encoding='utf-8')
     gerar_graficos_oof(experimento)
-    assert not (experimento/'oof'/'graficos_gerados'/'00_painel_score_composto.png').exists()
+    assert not (experimento/'vencedor'/'visualizacao'/'oof'/'00_painel_score_composto.png').exists()
 
 
 def test_yaml_antigo_sem_chave_painel_suportado(experimento):
@@ -164,7 +165,7 @@ def test_yaml_antigo_sem_chave_painel_suportado(experimento):
     del cfg['visualizacao']['graficos']['painel_score_composto']
     arq.write_text(yaml.safe_dump(cfg),encoding='utf-8')
     gerar_graficos_oof(experimento)
-    assert (experimento/'oof'/'graficos_gerados'/'00_painel_score_composto.png').exists()
+    assert (experimento/'vencedor'/'visualizacao'/'oof'/'00_painel_score_composto.png').exists()
 
 
 def test_painel_00_refino_exibe_titulo_nota_e_fontes_configuradas(experimento, monkeypatch):
@@ -189,7 +190,7 @@ def test_painel_00_refino_exibe_titulo_nota_e_fontes_configuradas(experimento, m
     assert any('As cores não definem qualidade universal' in s for s,_ in rotulos)
     assert any('e LogLoss com uma previsão de referência' in s for s,_ in rotulos)
     assert any(s.startswith('Dados: OOF F1') and f>=9 for s,f in rotulos)
-    assert (experimento/'oof'/'graficos_gerados'/'00_painel_score_composto.png').is_file()
+    assert (experimento/'vencedor'/'visualizacao'/'oof'/'00_painel_score_composto.png').is_file()
 
 
 def test_pr_pontos_operacionais_calculados_sem_novo_limiar():
@@ -207,10 +208,10 @@ def test_pr_pontos_operacionais_calculados_sem_novo_limiar():
 
 def test_pr_csv_pontos_coincidem_com_predicoes_oof(experimento):
     gerar_graficos_oof(experimento)
-    arquivo=experimento/'oof'/'graficos_gerados'/'01_curva_precision_recall_pontos.csv'
+    arquivo=experimento/'vencedor'/'visualizacao'/'oof'/'01_curva_precision_recall_pontos.csv'
     dados=pd.read_csv(arquivo)
     assert list(dados['corte'])==['MCC OOF','Fixo 0,50']
-    with np.load(experimento/'oof'/'predicoes'/'abc012.npz',allow_pickle=False) as a:
+    with np.load(experimento/'vencedor'/'oof'/'predicoes.npz',allow_pickle=False) as a:
         y=a['y_true'];p=a['prob_fraude']
     for row in dados.itertuples():
         pt=_ponto_operacional_pr(y,p,row.limiar)
@@ -228,8 +229,8 @@ def test_pr_yaml_desativa_pontos_sem_alterar_ap(experimento):
     cfg['visualizacao']['graficos']['curva_pr']['mostrar_ponto_mcc_oof']=False
     arq.write_text(yaml.safe_dump(cfg),encoding='utf-8')
     gerar_graficos_oof(experimento)
-    assert (experimento/'oof'/'graficos_gerados'/'01_curva_precision_recall.png').exists()
-    assert (experimento/'oof'/'graficos_gerados'/'01_curva_precision_recall_pontos.csv').exists()
+    assert (experimento/'vencedor'/'visualizacao'/'oof'/'01_curva_precision_recall.png').exists()
+    assert (experimento/'vencedor'/'visualizacao'/'oof'/'01_curva_precision_recall_pontos.csv').exists()
 
 
 def test_pr_zoom_auto_mantem_ponto_mcc_e_limites_uteis():
@@ -278,19 +279,19 @@ def test_pr_visualizacao_zoom_sem_inset_e_mantem_pontos_csv(experimento, monkeyp
     assert vistos['detalhes'] == []
     assert any('Zoom de leitura:' in s for s in vistos['textos'])
     assert not any('visão geral' in s.lower() for s in vistos['textos'])
-    assert (experimento/'oof'/'graficos_gerados'/'01_curva_precision_recall_pontos.csv').exists()
+    assert (experimento/'vencedor'/'visualizacao'/'oof'/'01_curva_precision_recall_pontos.csv').exists()
 
 
 def test_pr_omitir_ponto_degenerado_so_no_desenho(experimento, monkeypatch):
     from src import visualizacao_oof as visu
     from matplotlib.axes import Axes
-    arq=experimento/'oof'/'predicoes'/'abc012.npz'
+    arq=experimento/'vencedor'/'oof'/'predicoes.npz'
     with np.load(arq, allow_pickle=False) as npz:
         valores={k:npz[k] for k in npz.files}
     # Scores menores que 0.5, sem alterar identidade do fold.
     valores['prob_fraude'] *= .4
     np.savez_compressed(arq, **valores)
-    csv=experimento/'oof'/'resultados_grade.csv'
+    csv=experimento/'vencedor'/'metricas'/'resultados_grade.csv'
     grade=pd.read_csv(csv)
     y=valores['y_true'];p=valores['prob_fraude']; limiar=.13
     ap=average_precision_score(y,p)
@@ -299,7 +300,7 @@ def test_pr_omitir_ponto_degenerado_so_no_desenho(experimento, monkeypatch):
     for nome,val in [('ap',ap),('mcc',mcc),('logloss',ll),('score',score)]:
         grade.loc[grade.id_candidato=='abc012',nome]=val
     grade.to_csv(csv,index=False)
-    escolha_path=experimento/'oof'/'melhor_configuracao.json'
+    escolha_path=experimento/'vencedor'/'metricas'/'melhor_configuracao.json'
     escolha=json.loads(escolha_path.read_text())
     escolha['score_oof']=score
     escolha_path.write_text(json.dumps(escolha),encoding='utf-8')
@@ -312,15 +313,15 @@ def test_pr_omitir_ponto_degenerado_so_no_desenho(experimento, monkeypatch):
     gerar_graficos_oof(experimento)
     # MCC e outros graficos usam scatter; verificar texto de ponto 0.50 na PR.
     assert not any(str(x).startswith('τ=0,50 ·') for x in vistos)
-    data=pd.read_csv(experimento/'oof'/'graficos_gerados'/'01_curva_precision_recall_pontos.csv')
+    data=pd.read_csv(experimento/'vencedor'/'visualizacao'/'oof'/'01_curva_precision_recall_pontos.csv')
     assert data.loc[data.corte=='Fixo 0,50','positivos_previstos'].iloc[0]==0
 
 
 def test_mcc_02_cortes_oof_e_05_exatos_e_mesma_amostra(experimento):
     from src.visualizacao_oof import _pontos_operacionais_mcc
-    with np.load(experimento/'oof'/'predicoes'/'abc012.npz',allow_pickle=False) as a:
+    with np.load(experimento/'vencedor'/'oof'/'predicoes.npz',allow_pickle=False) as a:
         y=a['y_true'];p=a['prob_fraude']
-    escolha=json.loads((experimento/'oof'/'melhor_configuracao.json').read_text())
+    escolha=json.loads((experimento/'vencedor'/'metricas'/'melhor_configuracao.json').read_text())
     pontos=_pontos_operacionais_mcc(y,p,escolha['limiar_mcc_oof'])
     assert len(pontos)==2
     assert [x['limiar'] for x in pontos]==[.13,.5]
@@ -329,7 +330,7 @@ def test_mcc_02_cortes_oof_e_05_exatos_e_mesma_amostra(experimento):
         assert pt['positivos_previstos']==np.count_nonzero(p>=pt['limiar'])
         assert pt['origem']=='OOF_F1_F9'
     gerar_graficos_oof(experimento)
-    saida=experimento/'oof'/'graficos_gerados'
+    saida=experimento/'vencedor'/'visualizacao'/'oof'
     csv=pd.read_csv(saida/'02_mcc_pontos_operacionais.csv')
     assert list(csv['corte'])==['MCC OOF','Fixo 0,50']
     assert np.allclose(csv['mcc_bruto'],[x['mcc_bruto'] for x in pontos])
@@ -391,7 +392,7 @@ def test_mcc_02_zoom_oculta_marcador_05_sem_mudar_metricas(experimento, monkeypa
     # Ponto otimo pertence ao zoom, referencia 0,50 fica so no texto.
     assert any(np.isclose(x,.13) for x in scatter_x)
     assert not any(np.isclose(x,.5) for x in scatter_x)
-    csv=pd.read_csv(experimento/'oof'/'graficos_gerados'/'02_mcc_pontos_operacionais.csv')
+    csv=pd.read_csv(experimento/'vencedor'/'visualizacao'/'oof'/'02_mcc_pontos_operacionais.csv')
     assert np.isclose(csv.loc[csv['corte']=='Fixo 0,50','limiar'].iloc[0],.5)
 
 
@@ -489,7 +490,7 @@ def test_confusao_quadrantes_e_faixas_pdf_sem_aproximacoes():
 def test_confusao_limiar_fixo_e_otimo_mesmos_dados(experimento):
     from src.visualizacao_oof import _matriz, _ler_resultados
     cfg, grade, escolha, y,p=_ler_resultados(experimento)
-    destino=experimento/'oof'/'graficos_gerados'
+    destino=experimento/'vencedor'/'visualizacao'/'oof'
     _matriz(cfg,y,p,.5,'matriz_confusao_05',destino,'png',75,True)
     _matriz(cfg,y,p,escolha['limiar_mcc_oof'],'matriz_confusao_mcc',destino,'png',75,True)
     assert (destino/'03_matriz_confusao_05.png').stat().st_size>10000
@@ -557,7 +558,7 @@ def test_distribuicao_05_yml_zoom_invalido():
 def test_distribuicao_05_gera_csv_com_frequencias_reais(experimento):
     from src.visualizacao_oof import _ler_resultados, _distribuicao
     cfg,grade,escolha,y,p=_ler_resultados(experimento)
-    d=experimento/'oof'/'graficos_gerados'
+    d=experimento/'vencedor'/'visualizacao'/'oof'
     _distribuicao(cfg,y,p,escolha,d,'png',70,True)
     tab=pd.read_csv(d/'05_distribuicao_probabilidades.csv')
     for classe in ('legitima','fraude'):

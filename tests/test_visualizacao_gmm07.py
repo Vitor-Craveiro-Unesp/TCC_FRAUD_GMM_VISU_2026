@@ -142,7 +142,7 @@ def test_galeria_exige_gmm07_da_dimensao_correta(configuracao,tmp_path):
         config['visualizacao']['graficos'][nome]['habilitar']=False
     e={'configuracao':{'reducao':{'n_components':1},'metodo':'PCA'},
        'id_candidato':'simulado','limiar_mcc_oof':.12}
-    gd=tmp_path/'teste_final'/'graficos_gerados'
+    gd=tmp_path/'vencedor'/'visualizacao'/'geometria_desenvolvimento'
     gd.mkdir(parents=True)
     (gd/'GMM07_sensibilidade_3d_comparativo.png').write_bytes(b'imagem-errada')
     estado=integrada._verificar_geracoes(tmp_path,config,e,executar=False)
