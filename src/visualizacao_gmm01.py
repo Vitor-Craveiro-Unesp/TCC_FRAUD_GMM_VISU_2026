@@ -73,28 +73,109 @@ def gerar(config, data, destino, ext, dpi, csv):
                     'Dominio da marginal invalido.')
         eixo = np.linspace(xmin, xmax, pontos)
         componentes, mistura = calcular_marginal(gm, j, eixo)
+
+                # =====================================================
+        # VISUALIZACAO DA DENSIDADE MARGINAL
+        # =====================================================
+
         fig, ax = plt.subplots(figsize=(10.8, 6.9))
+
         cores = plt.get_cmap('tab10')
+
+        # Componentes gaussianas
         for k, nome_gaussiana in enumerate(gm.saidas_):
-            ax.plot(eixo, componentes[k], ls='--', lw=1.9,
-                    color=cores(k % 10),
-                    label=f'{nome_gaussiana} — π={pesos[k]:.4g}', alpha=.94)
-        ax.plot(eixo, mistura, color='#172b46', lw=2.9,
-                label='Mistura marginal total', zorder=5)
-        ax.set(xlabel=nome, ylabel='Densidade marginal', xlim=(xmin, xmax))
+            ax.plot(
+                eixo,
+                componentes[k],
+                ls='--',
+                lw=1.7,
+                color=cores(k % 10),
+                label=f'{nome_gaussiana} (π={pesos[k]:.7f})',
+                alpha=.82
+            )
+
+        # Mistura gaussiana total
+        ax.plot(
+            eixo,
+            mistura,
+            color='#172b46',
+            lw=3.2,
+            label='Mistura total',
+            zorder=5
+        )
+
+        # Eixos
+        ax.set(
+            xlabel=nome,
+            ylabel='Densidade marginal',
+            xlim=(xmin, xmax)
+        )
+
         ax.set_ylim(bottom=0)
-        ax.set_title(f'GMM 01 — Densidade marginal | {nome} | '
-                     f'{gm.modelo_.covariance_type.upper()} | {d}D',
-                     fontsize=14, fontweight='bold', pad=14)
-        ax.grid(alpha=.18, ls=':')
-        ax.legend(loc='best', fontsize=9, frameon=True, ncol=2 if len(pesos)>4 else 1)
-        fig.text(.5, .035,
-                 'Curvas tracejadas = πₖ × N(t | μₖⱼ, Σₖⱼⱼ); linha escura = soma. '
-                 'Densidade NÃO é probabilidade de fraude. Ajuste: F1–F9; sem F10.',
-                 fontsize=8.6, color='#46556e', ha='center')
-        fig.subplots_adjust(left=.09, right=.975, top=.875, bottom=.16)
+
+        # Titulo principal
+        fig.suptitle(
+            'DENSIDADE MARGINAL DA MISTURA GAUSSIANA',
+            fontsize=16,
+            fontweight='bold',
+            y=.965
+        )
+
+        # Subtitulo
+        fig.text(
+            .5,
+            .905,
+            f'{nome} | {gm.modelo_.covariance_type.upper()} | {d}D',
+            ha='center',
+            fontsize=11,
+            color='#46556e'
+        )
+
+        # Grade
+        ax.grid(
+            alpha=.18,
+            ls=':'
+        )
+
+        # Legenda
+        ax.legend(
+            loc='best',
+            fontsize=9,
+            frameon=True,
+            ncol=2 if len(pesos) > 4 else 1
+        )
+
+        # Rodape
+        fig.text(
+            .5,
+            .035,
+            'Linha contínua: mistura total | '
+            'Linhas tracejadas: componentes gaussianas',
+            fontsize=8.8,
+            color='#46556e',
+            ha='center'
+        )
+
+        # Margens
+        fig.subplots_adjust(
+            left=.09,
+            right=.975,
+            top=.89,
+            bottom=.14
+        )
+
+        # Nome original do arquivo
         stem = f'GMM01_densidade_marginal_{d}d_{nome}'
-        geo._guardar(fig, destino, stem, ext, dpi)
+
+        # Salvar figura
+        geo._guardar(
+            fig,
+            destino,
+            stem,
+            ext,
+            dpi
+        )
+
         if csv:
             tab = pd.DataFrame({'coordenada':eixo, 'densidade_mistura':mistura})
             for k, nome_gaussiana in enumerate(gm.saidas_):

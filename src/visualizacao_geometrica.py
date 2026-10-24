@@ -343,7 +343,7 @@ def _painel_parametros_gaussianos(config, data, dest, ext, dpi, csv):
                     fontsize=16,fontweight='bold',color='#f5f9ff',va='center')
 
 
-            
+
             alto = info['rotulo_descritivo'] == regra['rotulo_alto']
 
             status = (
@@ -373,7 +373,7 @@ def _painel_parametros_gaussianos(config, data, dest, ext, dpi, csv):
                     color='#b9dcff'
                 )
 
-            
+
             ax.text(
                 .09, .74,
                 f"Peso da mistura  πₖ = {numero7(info['peso_mistura'])}",
@@ -391,7 +391,7 @@ def _painel_parametros_gaussianos(config, data, dest, ext, dpi, csv):
             )
 
 
-            
+
             medias = ', '.join(
                 numero7(v) for v in info['media_vetor_completo']
             )
@@ -404,7 +404,7 @@ def _painel_parametros_gaussianos(config, data, dest, ext, dpi, csv):
             ax.text(.09,.34,'Matriz de covariâncias Σₖ',transform=ax.transAxes,
                     color='#a9d4ff',fontsize=11,fontweight='bold')
 
-            
+
             linhas = [
                 ('[ ' if i == 0 else '  ')
                 + '  '.join(f'{numero7(v):>11}' for v in linha)
@@ -412,7 +412,7 @@ def _painel_parametros_gaussianos(config, data, dest, ext, dpi, csv):
                 for i, linha in enumerate(info['covariancia_completa'])
             ]
 
-            
+
             ax.text(.105,.265,'\n'.join(linhas),transform=ax.transAxes,
                     color='#f5f9ff',fontsize=10.2,family='monospace',va='top',linespacing=1.35)
             ax.set_xlim(0,1);ax.set_ylim(0,1)
@@ -448,7 +448,7 @@ def _painel_parametros_gaussianos(config, data, dest, ext, dpi, csv):
         )
 
 
-        
+
         topo_cartoes = y_subtitulo - (0.95 / altura_fig)
 
         fig.subplots_adjust(
@@ -512,7 +512,7 @@ def _scree(config, data, dest, ext, dpi, csv, *, origem='desenvolvimento'):
             ax_acum.axhline(valor, color='#64748b', linestyle=':',
                             linewidth=.85, alpha=.55, zorder=1)
 
-            
+
             ax_acum.text(
                 .995, valor,
                 f'{valor:.7f}',
@@ -523,7 +523,7 @@ def _scree(config, data, dest, ext, dpi, csv, *, origem='desenvolvimento'):
                 color='#69788b'
             )
 
-            
+
         for j in op.get('marcar_acumulados', [1, 2, 3]):
             k = int(j)
             if 1 <= k <= len(acumulada):
@@ -533,8 +533,8 @@ def _scree(config, data, dest, ext, dpi, csv, *, origem='desenvolvimento'):
         ax.axvline(nsel, color='#101820', linewidth=1.65,
                    linestyle='--', alpha=.85, zorder=6)
 
-        
-        
+
+
     ax.set_xlabel('Componente principal', fontsize=11)
 
     ax.set_ylabel(
@@ -581,7 +581,7 @@ def _scree(config, data, dest, ext, dpi, csv, *, origem='desenvolvimento'):
         y=.978
     )
 
-    
+
     legenda = []
 
     if barras:
@@ -603,7 +603,7 @@ def _scree(config, data, dest, ext, dpi, csv, *, origem='desenvolvimento'):
             )
         )
 
-        
+
     if op.get('destacar_componentes_selecionados', True):
         legenda.append(Line2D([0], [0], color='#101820', lw=1.65,
                               ls='--', label=f'PCA selecionado: {nsel}'))
@@ -617,7 +617,7 @@ def _scree(config, data, dest, ext, dpi, csv, *, origem='desenvolvimento'):
     fig.text(.5, .035,
              nota + ' Variância explicada não mede separação de fraudes; F10 não utilizado.',
              ha='center', fontsize=8.7, color='#506079')
-    
+
     fig.subplots_adjust(
         left=.105,
         right=.88,
@@ -696,7 +696,7 @@ def _pca_histograma_1d(config, data, dest, ext, dpi, csv, op, *, origem='desenvo
                 zorder=2
             )
 
-            
+
             if op.get('curvas_suavizadas_1d', True) and len(subset) >= 3:
                 curva = gaussian_filter1d(valores_hist, sigma=1.15, mode='nearest')
                 ax.plot(mids, curva, color=cor, linewidth=1.9, zorder=4)
@@ -714,7 +714,7 @@ def _pca_histograma_1d(config, data, dest, ext, dpi, csv, op, *, origem='desenvo
 
 
 
-        
+
     elif colorir == 'gaussiana_dominante':
         grupos = np.argmax(data['gamma'].to_numpy(), axis=1)
         _exigir(len(grupos) == len(x), 'Responsabilidades GMM nao alinhadas ao PCA.')
@@ -723,14 +723,14 @@ def _pca_histograma_1d(config, data, dest, ext, dpi, csv, op, *, origem='desenvo
             valores_hist, _ = np.histogram(subset, bins=edges, density=True)
             cor = plt.get_cmap('tab20')(int(k) % 20)
             ax.bar(mids, valores_hist, width=width * .93,
-                   
+
                    color=cor, alpha=.23, label=f'G{k+1} (n={len(subset)})')
-            
+
             if op.get('curvas_suavizadas_1d', True) and len(subset) >= 3:
                 ax.plot(mids, gaussian_filter1d(valores_hist, sigma=1.15, mode='nearest'),
                         color=cor, linewidth=1.5)
         ax.set_ylabel('Densidade por gaussiana (área = 1)')
-        
+
     elif colorir == 'risco':
         riscos = np.asarray(data['scores'], dtype=float)
         _exigir(len(riscos) == len(x) and np.isfinite(riscos).all() and
@@ -1296,9 +1296,26 @@ def _fronteira_1d_comparativa(config, data, gm, op, plano, idx, tau_star,
 
     fig, axes = plt.subplots(1, 2, figsize=(16.4, 7.4), sharex=True, sharey=True)
     fig.patch.set_facecolor('#ffffff')
-    fig.suptitle('GMM 08 — Mapa de risco e geometria 95% | '
-                 f'{gm.modelo_.covariance_type.upper()} | 1D',
-                 fontsize=16, fontweight='bold', y=.983)
+
+
+
+    fig.suptitle(
+        'MAPA DE RISCO E GEOMETRIA GAUSSIANA (95%)',
+        fontsize=16,
+        fontweight='bold',
+        y=.983
+    )
+
+    fig.text(
+        .5,
+        .920,
+        f'PC1 | {gm.modelo_.covariance_type.upper()} | 1D',
+        ha='center',
+        fontsize=11,
+        color='#5a6c84'
+    )
+
+
     nome_pc = data['coord'].columns[coluna]
     for j, (ax, tau, mcc, mascara) in enumerate((
         (axes[0], .5, mcc_fixo, classe_fixa),
@@ -1358,30 +1375,51 @@ def _fronteira_1d_comparativa(config, data, gm, op, plano, idx, tau_star,
         ax.grid(alpha=.12)
     axes[0].set_ylabel('Probabilidade estimada de fraude')
 
-    legenda=[Line2D([0],[0],color='#2361a1',lw=2.6,label='Risco contínuo'),
-             Line2D([0],[0],color='#171717',lw=2,label='Fronteira de decisão'),
-             Patch(facecolor='#f3c747',edgecolor='#b38904',hatch='////',
-                   label='Mudança entre cortes'),
-             Line2D([0],[0],ls='',marker='o',markersize=5,color='#4389c2',label='Legítimas'),
-             Line2D([0],[0],ls='',marker='o',markersize=5,color='#e58d31',label='Fraudes')]
+
+
+    legenda = [
+        Line2D([0], [0], color='#2361a1', lw=2.6,
+               label='Risco contínuo'),
+        Line2D([0], [0], color='#171717', lw=2,
+               label='Fronteira de decisão'),
+        Patch(facecolor='#f3c747', edgecolor='#b38904',
+              hatch='////', label='Mudança entre cortes')
+    ]
+
+
+
+
+
     if op.get('mostrar_gaussianas', True):
         legenda += [Line2D([0],[0],color=plt.get_cmap('tab10')(k%10),
                             ls='--',lw=2,label=f'{gm.saidas_[k]} — intervalo 95%')
                     for k in range(n_comp)]
-    fig.legend(handles=legenda,loc='upper center',bbox_to_anchor=(.5,.926),
-               ncol=min(5,len(legenda)),fontsize=8.7,frameon=False,
-               columnspacing=1.6,handlelength=2.7)
+
+
+
+
+    fig.legend(
+        handles=legenda,
+        loc='upper center',
+        bbox_to_anchor=(.5, .885),
+        ncol=min(5, len(legenda)),
+        fontsize=8.7,
+        frameon=False,
+        columnspacing=1.6,
+        handlelength=2.7
+    )
+
+
     direcao=('legítima → fraude' if tau_star < .5 else
              'fraude → legítima' if tau_star > .5 else 'nenhuma')
     fig.text(.5,.065,
              f'MCC OOF(0,50) = {mcc_fixo:.5f}    |    MCC OOF(τ*={tau_star:.6g}) = {mcc_otimo:.5f}'
              f'    |    Hachura: mudança de classe ({direcao})',
              fontsize=10,ha='center',color='#253652',fontweight='bold')
-    fig.text(.5,.035,
-             'Linhas coloridas = intervalos centrais gaussianos de 95%, não regiões de fraude. '
-             'MCC calculado nas predições OOF; geometria ajustada em F1–F9; F10 não utilizado.',
-             fontsize=8.6,ha='center',color='#506079')
-    fig.subplots_adjust(left=.07,right=.985,top=.76,bottom=.18,wspace=.12)
+
+
+    fig.subplots_adjust(left=.07,right=.985,top=.73,bottom=.18,wspace=.12)
+
     _guardar(fig,dest,'GMM08_mapa_risco_1d_comparativo',ext,dpi)
 
 

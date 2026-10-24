@@ -86,25 +86,105 @@ def gerar(config, data, destino, ext, dpi, csv):
             direita = eixo[-1] if j == len(eixo) else .5*(eixo[j-1]+eixo[j])
             ax.axvspan(esquerda,direita,color=cores[int(dom[i])],alpha=.16,zorder=0)
             if j < len(eixo): ax.axvline(direita,color='#172b46',ls=':',lw=1.3,alpha=.75)
+
+
         for g in range(k):
-            ax.plot(eixo,contribuicoes[g],ls='--',lw=1.35,color=cores[g],alpha=.9,
-                    label=f'{nomes[g]} — contribuição ponderada')
+            ax.plot(
+                eixo,
+                contribuicoes[g],
+                ls='--',
+                lw=1.7,
+                color=cores[g],
+                alpha=.82,
+                label=f'{nomes[g]}'
+            )
+
+
+
             media = p.means_[g,0]
             altura = float(np.interp(media,eixo,mistura))
             if eixo[0] <= media <= eixo[-1]:
                 ax.plot(media,altura,'x',ms=8,mew=2,color=cores[g])
+
+
         ax.plot(eixo,mistura,color='#172b46',lw=2.7,label='Mistura marginal total',zorder=4)
+
+
         ax.set(xlabel=nomes_dim[0], ylabel='Densidade marginal', xlim=(eixo[0],eixo[-1]))
         ax.set_ylim(bottom=0)
-        ax.set_title(f'GMM 04 — Regiões de dominância | {d}D | {p.covariance_type.upper()}',
-                     fontsize=15,weight='bold',pad=12)
-        handles=[Patch(facecolor=cores[g],alpha=.4,label=f'{nomes[g]} — região dominante') for g in range(k)]
-        handles += [Line2D([],[],color='#172b46',lw=2.5,label='Mistura total')]
-        ax.legend(handles=handles,loc='upper right',fontsize=8.5)
-        ax.grid(alpha=.1)
-        fig.text(.5,.045,'Faixas: maior responsabilidade γₖ(x). Curvas tracejadas: densidades dos componentes. '
-                 f'Dominância ≠ fraude. {origem}.',ha='center',color='#3c506a',fontsize=8.7)
-        fig.subplots_adjust(left=.09,right=.975,top=.87,bottom=.16)
+
+
+
+        fig.suptitle(
+            'REGIÕES DE DOMINÂNCIA DAS GAUSSIANAS',
+            fontsize=16,
+            fontweight='bold',
+            y=.965
+        )
+
+        fig.text(
+            .5,
+            .905,
+            f'{nomes_dim[0]} | {p.covariance_type.upper()} | {d}D',
+            ha='center',
+            fontsize=11,
+            color='#46556e'
+        )
+
+
+
+        handles = [
+            Patch(
+                facecolor=tuple(.84 + .16 * np.asarray(to_rgb(cores[g]))),
+                edgecolor=cores[g],
+                linewidth=1.2,
+                label=nomes[g]
+            )
+            for g in range(k)
+        ]
+
+        handles.append(
+            Line2D(
+                [], [],
+                color='#172b46',
+                lw=3.2,
+                label='Mistura total'
+            )
+        )
+
+        ax.legend(
+            handles=handles,
+            loc='upper right',
+            fontsize=9,
+            frameon=True,
+            ncol=2
+        )
+
+
+
+        ax.grid(alpha=.12, ls=':')
+
+        fig.text(
+            .5,
+            .045,
+            'Faixas: gaussiana dominante | '
+            'Curvas tracejadas: componentes | '
+            '×: médias gaussianas',
+            ha='center',
+            color='#46556e',
+            fontsize=8.8
+        )
+
+        fig.subplots_adjust(
+            left=.09,
+            right=.975,
+            top=.855,
+            bottom=.15
+        )
+
+
+
+
         stem='GMM04_dominancia_1d'
         geo._guardar(fig,destino,stem,ext,dpi)
         if csv:

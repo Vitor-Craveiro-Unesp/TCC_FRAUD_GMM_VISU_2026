@@ -105,12 +105,38 @@ def _grafico(config, data, escolha, planos, medias_fixas, *, destino, ext, dpi,
         fig, eixos = plt.subplots(1, 2, figsize=(16.1, 7.7), squeeze=False,
                                  sharex=(dimensoes == 1), sharey=(dimensoes == 1))
     fig.patch.set_facecolor('white')
-    titulo = f'GMM 07 — Sensibilidade da fronteira ao limiar | FULL | {dimensoes}D'
+
+
+
+    titulo = 'SENSIBILIDADE DA FRONTEIRA AO LIMIAR'
     fig.suptitle(titulo, fontsize=17, fontweight='bold', y=.988)
+
+    subtitulo = (
+    f'{nomes[0]} | FULL | {dimensoes}D'
+    if dimensoes == 1
+    else f'FULL | {dimensoes}D'
+    )
+
+    fig.text(
+    .5, .920,
+    subtitulo,
+    ha='center',
+    fontsize=11,
+    color='#5a6c84'
+    )
+
+
+
     cores = config['visualizacao']['classes']
     hachura_amarela = '#edbe31'
     quad = None
+
+
+
     for indice_corte, (limiar, mcc) in enumerate(((.5, mcc_fixo), (tau_star, mcc_otimo))):
+
+        simbolo_tau = 'τ' if indice_corte == 0 else 'τ*'
+
         for indice_plano, (par, grade, campo, pred_fixo, pred_otimo, mudou) in enumerate(planos):
             ax = eixos[indice_corte, indice_plano] if dimensoes == 3 else eixos[0, indice_corte]
             if dimensoes == 1:
@@ -166,9 +192,20 @@ def _grafico(config, data, escolha, planos, medias_fixas, *, destino, ext, dpi,
                 ax.set(xlim=(xx[0,0],xx[0,-1]),ylim=(yy[0,0],yy[-1,0]),
                        xlabel=nomes[par[0]],ylabel=nomes[par[1]])
             if not cruzou:
-                ax.text(.02,.03, f'Sem fronteira visível: s(x) não cruza τ={limiar:.5g}',
-                        ha='left', va='bottom', transform=ax.transAxes, fontsize=8.4,
-                        bbox={'facecolor':'white','edgecolor':'#ccd3dc','alpha':.91},zorder=9)
+
+
+
+                ax.text(
+                 .02, .03,
+                f'Sem cruzamento com {simbolo_tau} = {limiar:.7f}',
+                ha='left',
+                va='bottom',
+                transform=ax.transAxes,
+                fontsize=8.4,
+                bbox={'facecolor':'white', 'edgecolor':'#ccd3dc', 'alpha':.91},
+                zorder=9)
+
+
             if dimensoes == 3:
                 restante = next(i for i in range(3) if i not in par)
                 titulo_plano = (f'{nomes[par[0]]} × {nomes[par[1]]}\n'
@@ -179,16 +216,40 @@ def _grafico(config, data, escolha, planos, medias_fixas, *, destino, ext, dpi,
                         fontsize=8.5, color='#202e3f', fontweight='bold',
                         bbox={'facecolor':'white','alpha':.78,'edgecolor':'none'})
             else:
-                titulo_corte=('A — Corte fixo' if indice_corte == 0 else 'B — Corte ótimo MCC')
-                ax.set_title(f'{titulo_corte} | τ = {limiar:.6g}\n{nome_mcc} = {mcc:.5f}',
-                             fontsize=11.7, fontweight='medium', pad=10)
+
+
+                titulo_corte = (
+                'CORTE FIXO'
+                 if indice_corte == 0
+                else 'LIMIAR ÓTIMO DO MCC'
+                )
+
+                simbolo_tau = 'τ' if indice_corte == 0 else 'τ*'
+
+                ax.set_title(
+                f'{titulo_corte} | {simbolo_tau} = {limiar:.7f}\n{nome_mcc} = {mcc:.7f}',
+                fontsize=11.7,
+                fontweight='medium',
+                pad=10
+                )
+
             ax.grid(alpha=.08)
     if dimensoes == 3:
         fig.text(.026,.77, f'A — Corte fixo 0,50\n{nome_mcc}={mcc_fixo:.5f}',
                  rotation=90, va='center', ha='left',fontsize=10.5,fontweight='bold')
         fig.text(.026,.35, f'B — Corte ótimo MCC (τ*={tau_star:.6g})\n{nome_mcc}={mcc_otimo:.5f}',
                  rotation=90, va='center', ha='left',fontsize=10.5,fontweight='bold')
-        fig.subplots_adjust(left=.075,right=.885,top=.82,bottom=.14,wspace=.22,hspace=.36)
+
+
+
+        fig.subplots_adjust(
+        left=.075,
+        right=.88 if dimensoes == 2 else .985,
+        top=.75,
+        bottom=.18,
+        wspace=.22
+        )
+
         cax=fig.add_axes([.91,.22,.012,.59])
         fig.colorbar(quad,cax=cax,label='Score conjunto s(x) — mesma escala')
     else:
@@ -197,31 +258,71 @@ def _grafico(config, data, escolha, planos, medias_fixas, *, destino, ext, dpi,
         if dimensoes==2:
             cax=fig.add_axes([.905,.205,.012,.56])
             fig.colorbar(quad,cax=cax,label='Score conjunto s(x) — mesma escala')
-    legenda=[Line2D([0],[0],color='#101010',lw=2,label='Fronteira s(x) = τ'),
-            Patch(facecolor='#edbe31',edgecolor='#b58b04',hatch='////',
-                  label='Região cuja classe mudou'),
-            Line2D([0],[0],color='#2361a1',lw=2,label='Risco contínuo' if dimensoes==1 else 'Score conjunto'),
-            Line2D([0],[0],marker='o',linestyle='',color=cores['legitima']['cor'],
-                   markersize=5,label='Legítimas (projeção)' if dimensoes==3 else 'Legítimas'),
-            Line2D([0],[0],marker='*',linestyle='',color=cores['fraude']['cor'],
-                   markersize=7,label='Fraudes (projeção)' if dimensoes==3 else 'Fraudes')]
-    # Em 2D/3D a legenda 'Risco contínuo' é redundante com a barra de cores.
-    if dimensoes != 1:
+
+
+
+
+    legenda = [
+        Line2D([0], [0], color='#101010', lw=2, label='Fronteira (s(x) = τ)'),
+        Patch(facecolor='#edbe31', edgecolor='#b58b04', hatch='////',
+             label='Região de mudança'),
+        Line2D([0], [0], color='#2361a1', lw=2,
+               label='Risco contínuo' if dimensoes == 1 else 'Score conjunto'),
+        Line2D([0], [0], marker='o', linestyle='', color=cores['legitima']['cor'],
+               markersize=5,
+            label='Legítimas (projeção)' if dimensoes == 3 else 'Legítimas'),
+        Line2D([0], [0], marker='*', linestyle='', color=cores['fraude']['cor'],
+               markersize=7,
+            label='Fraudes (projeção)' if dimensoes == 3 else 'Fraudes')]
+
+
+
+
+
+
+    # PCA 1D: remover Legítimas e Fraudes da legenda.
+    # PCA 2D/3D: manter as observações na legenda.
+    if dimensoes == 1:
+        legenda = legenda[:3]
+    else:
         legenda.pop(2)
-    fig.legend(handles=legenda,loc='upper center',bbox_to_anchor=(.5,.927),
-               ncol=len(legenda),frameon=False,fontsize=9.5)
-    direcao=('legítima → fraude' if tau_star < .5 else
-             'fraude → legítima' if tau_star > .5 else 'nenhuma mudança')
-    fig.text(.5,.092, f'{nome_mcc}(0,50) = {mcc_fixo:.5f}    |    '
-                       f'{nome_mcc}(τ*={tau_star:.6g}) = {mcc_otimo:.5f}    |    '
-                       f'Mudança: {direcao}',ha='center',fontsize=10.3,
-             color='#1b3048',fontweight='bold')
-    fig.text(.5,.063, nota_mcc + ' F10 não utilizado.',ha='center',fontsize=9,color='#435875')
-    fig.text(.5,.038, ('Comparação dos mesmos scores, observações e escala. '
-                       'Geometria ajustada em F1–F9.' +
-                       (' Em 3D, campos são cortes (não marginais); os pontos são projeções.'
-                        if dimensoes==3 else '')),
-             ha='center',fontsize=8.6,color='#435875')
+
+
+
+    fig.legend(
+    handles=legenda,
+    loc='upper center',
+    bbox_to_anchor=(.5, .875),
+    ncol=len(legenda),
+    frameon=False,
+    fontsize=9.5
+)
+
+
+
+
+    direcao = (
+    'legítima → fraude' if tau_star < .5 else
+    'fraude → legítima' if tau_star > .5 else
+    'nenhuma mudança')
+
+    fig.text(
+    .5, .090,
+    f'{nome_mcc}(τ=0.5000000) = {mcc_fixo:.7f}   |   '
+    f'{nome_mcc}(τ*={tau_star:.7f}) = {mcc_otimo:.7f}   |   '
+    f'Mudança: {direcao}',
+    ha='center',
+    fontsize=10.2,
+    color='#1b3048',
+    fontweight='bold'
+    )
+
+
+
+
+
+
+
     nome = f'GMM07_sensibilidade_{dimensoes}d_comparativo'
     geo._guardar(fig,destino,nome,ext,dpi)
     return nome
