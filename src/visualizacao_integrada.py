@@ -250,6 +250,21 @@ def _verificar_geracoes(experimento,config,escolha,*,executar):
                             if n=='regioes_dominancia'
                             else any(geo_dir.glob(f'{GEO_PREFIXOS[n]}*{ext}')))))
             ) for n in esperado_geo)
+
+                # Exigir os tres graficos independentes do PCA 1D.
+        if (
+            'pca_biplot' in esperado_geo
+            and escolha['configuracao']['metodo'].upper() == 'PCA'
+            and int(escolha['configuracao']['reducao']['n_components']) == 1
+        ):
+            imagens_geo = imagens_geo and all(
+                (geo_dir / f'{nome}{ext}').is_file()
+                for nome in (
+                    'PCA_COEFICIENTES_PC1',
+                    'PCA_OBSERVACOES_PC1'
+                )
+            )
+
         return imagens_oof,imagens_geo
 
     tem_oof,tem_geo=completos()
@@ -418,9 +433,34 @@ def integrar(experimento, *, planejar=False, complementar_2d=True):
                 if 'sensibilidade_fronteira' in ativos_geo:
                     dim=int(escolha['configuracao']['reducao']['n_components'])
                     permitido=permitido or arq.stem==f'GMM07_sensibilidade_{dim}d_comparativo'
+
+
+
+
+
                 if 'densidades_marginais' in ativos_geo:
-                    dim=int(escolha['configuracao']['reducao']['n_components'])
-                    permitido=permitido or arq.stem.startswith(f'GMM01_densidade_marginal_{dim}d_')
+                    dim = int(
+                        escolha['configuracao']['reducao']['n_components']
+                    )
+                    permitido = permitido or arq.stem.startswith(
+                        f'GMM01_densidade_marginal_{dim}d_'
+                    )
+
+                # Incluir os dois graficos adicionais do PCA 1D.
+                if 'pca_biplot' in ativos_geo:
+                    dim = int(
+                        escolha['configuracao']['reducao']['n_components']
+                    )
+
+                    if dim == 1 and arq.stem in {
+                        'PCA_COEFICIENTES_PC1',
+                        'PCA_OBSERVACOES_PC1'
+                    }:
+                        permitido = True
+
+
+
+
             if permitido:
                 relativo=Path(secao)/arq.name
                 _arquivo_seguro_copiar(arq,base/relativo)
