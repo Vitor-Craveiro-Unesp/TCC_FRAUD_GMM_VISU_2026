@@ -1,4 +1,4 @@
-"""Passo 07.01 — sete tipos de gráficos de validação OOF, somente vencedor.
+"""Passo 07.01 — oito tipos de gráficos de validação OOF, somente vencedor.
 
 Executar, na raiz de TCC_EXPERIMENTAL_V3:
     python -m src.visualizacao_oof --experimento outputs/ensaio_pca_gmm_...
@@ -39,6 +39,7 @@ ARQUIVOS = {
     'matriz_confusao_mcc': '04_matriz_confusao_mcc',
     'distribuicao_probabilidades': '05_distribuicao_probabilidades',
     'comparacao_hiperparametros': '06_comparacao_hiperparametros',
+    'metricas_por_fold': '07_metricas_por_fold',
 }
 
 
@@ -244,7 +245,7 @@ def _plot_painel_00(config, y, p, vencedor, escolha, destino, ext, dpi, dados):
     fig.text(.075, .932, 'Indicadores de desempenho e score composto',
              color=cor_texto, fontsize=fonte_titulo, weight='bold')
 
-    
+
 
 
 
@@ -300,7 +301,7 @@ def _plot_painel_00(config, y, p, vencedor, escolha, destino, ext, dpi, dados):
         fig.text(.09, fundo_y+.029, nota,
                  color=cor_texto, fontsize=fonte_secundaria, weight='bold')
         fig.text(.09, fundo_y+.010, detalhe, color=cor_suave, fontsize=fonte_secundaria-0.3)
-    
+
 
     # Caixa de informacoes uteis
 
@@ -761,7 +762,7 @@ def _plot_mcc(config, y, p, vencedor, escolha, destino, ext, dpi, dados):
     if op.get('mostrar_limiar_oof', True):
         ax.axvline(tau, ls='--', color='#168e66', lw=1.25,
                    label='Limiar ótimo (τ*)')    
-        
+
     if op.get('mostrar_mcc_no_limiar_oof', True):
         ax.scatter([tau], [otimo['mcc_bruto']], s=78, marker='o',
                    color='#168e66', edgecolors='white', linewidths=.9, zorder=6,
@@ -849,7 +850,7 @@ def _plot_mcc(config, y, p, vencedor, escolha, destino, ext, dpi, dados):
             va='top'
         )
 
-        
+
     _salvar(fig, _caminho_png(destino, 'curva_mcc', ext), dpi=dpi)
     if dados:
         _csv_protegido(pd.DataFrame({'limiar':threshold, 'mcc':mcc}),
@@ -1336,7 +1337,7 @@ def _comparacao(config, grade, escolha, destino, ext, dpi, dados):
     }
 
 
-    
+
     # Evitar zero negativo e preservar sete casas em todos os eixos.
     formato = FuncFormatter(
         lambda valor, _pos: f'{0.0 if abs(valor) < 0.00000005 else valor:.7f}'
@@ -1450,6 +1451,118 @@ def _comparacao(config, grade, escolha, destino, ext, dpi, dados):
         )
 
 
+
+def _plot_metricas_por_fold(experimento, config, y, p, escolha, destino, ext, dpi, dados):
+    """AP, MCC bruto e exp(-LogLoss) por F1..F9; sem otimizar limiares."""
+    from matplotlib.ticker import FuncFormatter, MaxNLocator
+
+    # A origem unica e o NPZ consolidado do vencedor, ja validado no 06.03.
+    caminho = layout.predicoes_vencedor(experimento)
+    with np.load(caminho, allow_pickle=False) as arq:
+        _exigir('fold' in arq.files, 'NPZ vencedor sem identificacao dos folds.')
+        _exigir(str(arq['id_candidato'].item()) == str(escolha['id_candidato'])
+                and int(arq['fold_esperado'].item()) == 0,
+                'NPZ de folds nao corresponde ao OOF do vencedor.')
+        folds = np.asarray(arq['fold'], dtype=np.int64)
+        _exigir(np.array_equal(np.asarray(arq['y_true'], dtype=np.int8), y)
+                and np.array_equal(np.asarray(arq['prob_fraude'], dtype=np.float64), p),
+                'Folds, rotulos e probabilidades OOF desalinhados.')
+
+    _exigir(folds.shape == y.shape
+            and set(np.unique(folds)) == set(range(1, 10)),
+            'Esperados exclusivamente os nove folds F1..F9.')
+    tau = float(escolha['limiar_mcc_oof'])
+    _exigir(np.isfinite(tau) and 0.0 <= tau <= 1.0,
+            'Limiar MCC global OOF invalido.')
+
+    linhas = []
+    for k in range(1, 10):
+        mascara = folds == k
+        yk, pk = y[mascara], p[mascara]
+        _exigir(0 < int(yk.sum()) < len(yk),
+                f'Fold F{k} sem as duas classes reais.')
+        perda = float(log_loss(yk, pk, labels=[0, 1]))
+        linhas.append({
+            'fold': k,
+            'n_observacoes': int(len(yk)),
+            'n_fraudes': int(yk.sum()),
+            'prevalencia_fraude': float(yk.mean()),
+            'ap': float(average_precision_score(yk, pk)),
+            'mcc_corte_050': float(matthews_corrcoef(yk, pk >= 0.5)),
+            'mcc_corte_otimo_oof': float(matthews_corrcoef(yk, pk >= tau)),
+            'logloss': perda,
+            'exp_menos_logloss': float(np.exp(-perda)),
+            'limiar_otimo_oof_global': tau,
+        })
+    tabela = pd.DataFrame(linhas)
+    _exigir(int(tabela['n_observacoes'].sum()) == len(y),
+            'Contagem dos folds difere do OOF total.')
+
+    x = np.arange(1, 10)
+    formato = FuncFormatter(
+        lambda v, _: f'{0.0 if abs(v) < 0.00000005 else v:.7f}'
+    )
+    fig, eixos = plt.subplots(3, 1, figsize=(12.5, 11.5), facecolor='white')
+    fig.subplots_adjust(left=.13, right=.965, top=.88, bottom=.075, hspace=.49)
+
+    fig.suptitle('ESTABILIDADE DAS MÉTRICAS POR FOLD OOF',
+                 fontsize=16, fontweight='bold', y=.980, color='#20324a')
+
+
+
+
+
+
+
+
+
+
+    ax = eixos[0]
+    ax.plot(x, tabela['ap'], '-o', color='#285da2', lw=2,
+            ms=5, label='AP por fold')
+    ax.plot(x, tabela['prevalencia_fraude'], '--s', color='#ad8573',
+            lw=1.3, ms=3.5, label='Prevalência por fold')
+    ax.set_title('A — Average Precision (AP)', loc='left',
+                 fontsize=12, fontweight='bold', pad=10)
+    ax.set_ylabel('AP / prevalência')
+    ax.legend(frameon=False, fontsize=9, loc='upper right')
+
+    ax = eixos[1]
+    ax.plot(x, tabela['mcc_corte_050'], '-o', color='#d08040',
+            lw=1.8, ms=5, label='MCC | τ = 0,5000000')
+    ax.plot(x, tabela['mcc_corte_otimo_oof'], '-o', color='#218765',
+            lw=1.8, ms=5, label=f'MCC | τ* = {tau:.7f}')
+    ax.axhline(0, color='#8b96a6', lw=.85, ls=':')
+    ax.set_title('B — Matthews Correlation Coefficient (MCC)',
+                 loc='left', fontsize=12, fontweight='bold', pad=10)
+    ax.set_ylabel('MCC bruto')
+    ax.legend(frameon=False, fontsize=9, loc='upper right')
+
+    ax = eixos[2]
+    ax.plot(x, tabela['exp_menos_logloss'], '-o', color='#7656a5',
+            lw=2, ms=5, label='exp(-LogLoss) por fold')
+    ax.set_title('C — exp(-LogLoss)', loc='left',
+                 fontsize=12, fontweight='bold', pad=10)
+    ax.set_ylabel('exp(-LogLoss)')
+    ax.legend(frameon=False, fontsize=9, loc='upper right')
+
+    for ax in eixos:
+        ax.set_xlim(.7, 9.3)
+        ax.set_xticks(x, [f'F{k}' for k in x])
+        ax.set_xlabel('Fold de validação OOF')
+        ax.yaxis.set_major_locator(MaxNLocator(nbins=5))
+        ax.yaxis.set_major_formatter(formato)
+        ax.tick_params(axis='y', labelsize=8.7)
+        ax.grid(axis='y', color='#dbe3ed', alpha=.7, lw=.8)
+        ax.set_axisbelow(True)
+        for lado in ('top', 'right'):
+            ax.spines[lado].set_visible(False)
+
+    _salvar(fig, _caminho_png(destino, 'metricas_por_fold', ext), dpi=dpi)
+    if dados:
+        _csv_protegido(tabela, destino / '07_metricas_por_fold.csv')
+
+
 def gerar_graficos_oof(experimento: Path):
     """Gera os graficos preditivos e o Painel 00 configurados e retorna resumo (sem tocar no F10)."""
     experimento=Path(experimento).resolve()
@@ -1472,6 +1585,7 @@ def gerar_graficos_oof(experimento: Path):
         'matriz_confusao_mcc':lambda:_matriz(config,y,p,float(escolha['limiar_mcc_oof']), 'matriz_confusao_mcc',destino,ext,dpi,dados),
         'distribuicao_probabilidades':lambda:_distribuicao(config,y,p,escolha,destino,ext,dpi,dados),
         'comparacao_hiperparametros':lambda:_comparacao(config,grade,escolha,destino,ext,dpi,dados),
+        'metricas_por_fold':lambda:_plot_metricas_por_fold(experimento,config,y,p,escolha,destino,ext,dpi,dados),
     }
     for nome,func in funcoes.items():
         if _ativado(config,nome):
@@ -1484,7 +1598,9 @@ def gerar_graficos_oof(experimento: Path):
             'status_escolha':escolha['status'],'usa_f10':False,
             'reajustou_modelo':False,'limiar_mcc_oof':float(escolha['limiar_mcc_oof']),
             'tipos_gerados':gerados,'tipos_omitidos_por_yaml':omitidos,
-            'tipos_geometricos_pendentes_passo_07_02':list(config['visualizacao']['graficos'])[6:],
+            'tipos_geometricos_pendentes_passo_07_02':[
+                nome for nome in config['visualizacao']['graficos'] if nome not in ARQUIVOS
+            ],
             'diretorio':str(destino)}
     if 'painel_score_composto' in gerados:
         painel_meta = {'tipo':'painel_00_composto', 'origem':'OOF_F1_F9',

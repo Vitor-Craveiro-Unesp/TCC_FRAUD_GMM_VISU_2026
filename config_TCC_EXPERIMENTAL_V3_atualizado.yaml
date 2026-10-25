@@ -478,6 +478,19 @@ visualizacao:
       maximo_configuracoes: 25          # Grafico; tabela CSV pode ter todas.
 
     # --------------------------------------------------------
+    # 07 — ESTABILIDADE DAS METRICAS POR FOLD OOF
+    # --------------------------------------------------------
+    # AP por fold: referencia pela prevalencia da classe fraude.
+    # MCC por fold: comparar tau=0.50 e tau* global do OOF.
+    # exp(-LogLoss) por fold: probabilidades originais.
+    # Somente F1-F9; nunca utilizar F10.
+    # Nao reajustar modelos nem otimizar limiares por fold.
+    # --------------------------------------------------------
+    metricas_por_fold:
+      habilitar: true
+      gerar_em: ["oof"]
+
+    # --------------------------------------------------------
     # GMM 01 — DENSIDADES MARGINAIS POR DIMENSAO (PDF)
     # 1D: uma imagem; 2D: duas imagens; 3D: tres imagens.
     # Componentes ponderados por pi_k e sua soma (mistura total).
