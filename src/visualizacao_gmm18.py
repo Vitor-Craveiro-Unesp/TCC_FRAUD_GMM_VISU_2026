@@ -81,21 +81,28 @@ def gerar(config, data, destino, ext, dpi, csv):
     fig.suptitle('CONVERGÊNCIA DO ALGORITMO EM', fontsize=16,
                  fontweight='bold', y=.968, color='#20324a')
     dim = len(gmm.colunas_)
-    fig.text(.5, .915,
+
+
+
+    fig.text(.5, .895,
              f'{dim}D | {modelo.covariance_type.upper()} | K={modelo.n_components} | '
              f'{len(historicos)} inicializações',
              ha='center', fontsize=10.5, color='#61728a')
+
+
     fig.legend(*ax.get_legend_handles_labels(), loc='upper center',
                bbox_to_anchor=(.5, .864), ncol=min(3, len(historicos)),
                frameon=False, fontsize=9.5)
+
+
+
     fig.text(.135, .085,
              f'Melhor inicialização: {melhor}  |  '
              f'Lower bound final = {float(modelo.lower_bound_):.7f}  |  '
              f'Iterações = {int(modelo.n_iter_)}',
              fontsize=9.8, color='#26374d', weight='bold')
-    fig.text(.135, .053,
-             'Trajetórias reais do EM no desenvolvimento F1–F9; F10 não utilizado.',
-             fontsize=8.8, color='#66758a')
+
+
 
     destino = Path(destino)
     vis._salvar(fig, destino / (NOME + '.' + ext), dpi=dpi)
