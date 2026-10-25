@@ -64,9 +64,34 @@ def gerar(config, data, destino, ext, dpi, csv):
                 linewidth=2.8 if selecionada else 1.65,
                 alpha=1 if selecionada else .78, label=rotulo,
                 zorder=4 if selecionada else 2)
-        ax.scatter([xs[-1]], [valores[-1]], s=70 if selecionada else 35,
-                   color=cor, edgecolors='white', linewidths=1.0,
-                   zorder=6 if selecionada else 3)
+
+
+
+        # Marcadores distintos para revelar curvas sobrepostas.
+        if not selecionada:
+            marcador = 'x' if indice % 2 == 0 else '+'
+
+            ax.scatter(
+                xs,
+                valores,
+                marker=marcador,
+                s=42,
+                color=cor,
+                linewidths=1.5,
+                zorder=10
+            )
+
+        # Destacar o ponto final de cada inicializacao.
+        ax.scatter(
+            [xs[-1]],
+            [valores[-1]],
+            s=70 if selecionada else 35,
+            color=cor,
+            edgecolors='white',
+            linewidths=1.0,
+            zorder=6 if selecionada else 3
+        )
+
     ax.set_xlabel('Iteração do algoritmo EM', fontsize=11)
     ax.set_ylabel('Log-verossimilhança média (lower bound)', fontsize=10.8)
     ax.set_xlim(left=1)
