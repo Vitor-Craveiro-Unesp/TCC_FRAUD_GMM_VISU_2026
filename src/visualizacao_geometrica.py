@@ -42,8 +42,9 @@ TIPOS = (
     'painel_parametros_gaussianos', 'pca_cotovelo', 'pca_projecoes', 'pca_biplot',
     'tsne_trustworthiness', 'tsne_mapa', 'tsne_diagnostico', 'mapa_risco_fronteira',
     'sensibilidade_fronteira', 'densidades_marginais', 'regioes_dominancia',
+    'convergencia_em',
 )
-NUM = {'densidades_marginais': 1, 'regioes_dominancia': 4, 'painel_parametros_gaussianos': 9, 'pca_cotovelo': 11,
+NUM = {'convergencia_em': 18, 'densidades_marginais': 1, 'regioes_dominancia': 4, 'painel_parametros_gaussianos': 9, 'pca_cotovelo': 11,
        'pca_projecoes': 12, 'tsne_trustworthiness': 2, 'tsne_mapa': 13, 'tsne_diagnostico': 14,
        'mapa_risco_fronteira': 8, 'sensibilidade_fronteira': 7}
 
@@ -139,7 +140,10 @@ def _treinar_vencedor(df, config, escolha):
     _exigir(coord.index.equals(y.index), 'Desalinhamento entre coordenadas e labels.')
     amostra = selecionar_indices_gmm(y.to_numpy(),config,modo=cand['modo'],
                                    razao=cand['razao'],fold_validacao=0)
-    modelo = GMMNaoSupervisionado(config,cand['gmm']).fit(coord.iloc[amostra])
+    registrar_em = bool(config.get('visualizacao', {}).get('graficos', {})
+                       .get('convergencia_em', {}).get('habilitar', False))
+    modelo = GMMNaoSupervisionado(config,cand['gmm']).fit(
+        coord.iloc[amostra], registrar_historico_em=registrar_em)
     gamma = modelo.responsabilidades(coord)
     rh = RiscoHistoricoGaussianas(config,cand['suavizacao']).fit(gamma,y)
     probs = PreditorProbabilisticoGMM(modelo,rh).prever_probabilidade(coord)
@@ -1672,9 +1676,11 @@ def executar(experimento, *, raiz=None, somente_planejar=False):
     from src import visualizacao_gmm01 as marginais
     from src import visualizacao_gmm04 as dominancia
     from src import visualizacao_pca_biplot as biplot
+    from src import visualizacao_gmm18 as em_grafico
     funcoes={
         'densidades_marginais':lambda:marginais.gerar(cfg,data,destino,ext,dpi,csv),
         'regioes_dominancia':lambda:dominancia.gerar(cfg,data,destino,ext,dpi,csv),
+        'convergencia_em':lambda:em_grafico.gerar(cfg,data,destino,ext,dpi,csv),
         'painel_parametros_gaussianos':lambda:_painel_parametros_gaussianos(cfg,data,destino,ext,dpi,csv),
         'sensibilidade_fronteira':lambda:sensibilidade.gerar(cfg,data,escolha,destino,ext,dpi,csv,
                           avaliacao={'y':y_av_oof,'p':p_av_oof,'origem':'oof'}),

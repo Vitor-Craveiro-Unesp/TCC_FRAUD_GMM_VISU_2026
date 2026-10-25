@@ -189,7 +189,7 @@ def test_planejar_nao_reajusta_ou_le_parquet(cfg, sint, tmp_path, monkeypatch):
     monkeypatch.setattr(m,'_treinar_vencedor',lambda *a: pytest.fail('Nao pode treinar no planejamento'))
     r=m.executar(exp,raiz=tmp_path,somente_planejar=True)
     assert r['planejamento'] is True
-    assert len(r['graficos'])==8
+    assert len(r['graficos'])==9
     assert 'pca_biplot' in r['graficos']
     assert 'tsne_mapa' not in r['graficos']
 

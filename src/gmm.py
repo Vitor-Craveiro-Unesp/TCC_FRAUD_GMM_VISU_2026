@@ -13,6 +13,7 @@ from itertools import product
 import numpy as np
 import pandas as pd
 from sklearn.mixture import GaussianMixture
+from src.gmm_convergencia_em import GaussianMixtureComHistorico
 
 
 _PARAMETROS = (
@@ -108,14 +109,15 @@ class GMMNaoSupervisionado:
             raise ValueError("GMM recebeu NaN ou infinito.")
         return matriz
 
-    def fit(self, X):
+    def fit(self, X, *, registrar_historico_em=False):
         """Ajusta um GMM sem labels. X deve ser somente treino NORMAL/RUS."""
         matriz = self._validar_X(X)
         n = len(X)
         k = int(self.parametros["n_components"])
         if k > n:
             raise ValueError(f"GMM K={k} excede n_treino_gmm={n}.")
-        modelo = GaussianMixture(
+        classe_gmm = GaussianMixtureComHistorico if registrar_historico_em else GaussianMixture
+        modelo = classe_gmm(
             n_components=k,
             covariance_type=self.parametros["covariance_type"],
             reg_covar=float(self.parametros["reg_covar"]),

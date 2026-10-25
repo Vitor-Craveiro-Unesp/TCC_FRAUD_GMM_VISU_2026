@@ -491,6 +491,14 @@ visualizacao:
       gerar_em: ["oof"]
 
     # --------------------------------------------------------
+    # GMM 18 — CONVERGENCIA DO EM (TRES INICIALIZACOES)
+    # Usa o MESMO ajuste GMM do vencedor, apenas no desenvolvimento.
+    # Nao muda n_init, RNG, criterio OOF nem acessa F10.
+    convergencia_em:
+      habilitar: true
+      gerar_em: ["teste_final"]
+
+    # --------------------------------------------------------
     # GMM 01 — DENSIDADES MARGINAIS POR DIMENSAO (PDF)
     # 1D: uma imagem; 2D: duas imagens; 3D: tres imagens.
     # Componentes ponderados por pi_k e sua soma (mistura total).

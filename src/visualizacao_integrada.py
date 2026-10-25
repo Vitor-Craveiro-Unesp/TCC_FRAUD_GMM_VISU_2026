@@ -45,6 +45,7 @@ GEO_PREFIXOS = {
     'tsne_diagnostico': '14_tsne_diagnostico',
     'mapa_risco_fronteira': 'GMM08_mapa_risco_',
     'sensibilidade_fronteira': 'GMM07_sensibilidade_',
+    'convergencia_em': 'GMM18_convergencia_em_inicializacoes',
 }
 
 
@@ -345,7 +346,7 @@ def _complementar(experimento,config,grade,escolha,*,executar):
 def _html_galeria(experimento,arquivos,escolha,complemento,metodo,tipo):
     blocos=[]
     for secao,titulo,aviso in (
-        ('oof','00–06 — Painel e validacao OOF','Predicoes fora do treino; somente o grafico 06 compara os candidatos.'),
+        ('oof','00–07 — Painel e validacao OOF','Predicoes fora do treino; somente o grafico 06 compara os candidatos.'),
         ('geometria_desenvolvimento','GMM 01/07/08/09 e diagnosticos PCA/t-SNE do vencedor','Modelo reajustado em F1–F9. Esta pasta NAO contem medidas do F10.'),
         ('complementar_2d','16 — Diagnostico 2D complementar','Outro candidato da grade OOF; NAO representa a fronteira do vencedor.')
     ):
