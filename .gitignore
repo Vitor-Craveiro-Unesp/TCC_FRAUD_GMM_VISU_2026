@@ -23,3 +23,20 @@ data/interim/
 *.pickle
 *.joblib
 /Temp/
+
+# Dados e resultados locais
+data/
+outputs/
+backups/
+Temp/
+TerceiraConversa/
+
+# Ambientes e caches
+.venv/
+__pycache__/
+.pytest_cache/
+
+# Backups e logs
+*.bak
+*.log
+
