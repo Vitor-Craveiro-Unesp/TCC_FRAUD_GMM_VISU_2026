@@ -124,6 +124,13 @@ def _circulo(ax, selecionadas):
     ax.set(xlim=(-1.25, 1.25), ylim=(-1.25, 1.25), xlabel='corr(X, PC1)', ylabel='corr(X, PC2)',
            title='Circulo de correlacoes (escala real)')
     ax.set_aspect('equal', adjustable='box'); ax.grid(alpha=.2)
+
+
+
+
+
+
+
 def _fig_observacoes_pc1(pc1, classes, config):
     """Observacoes sobre PC1 com dispersao vertical apenas visual."""
 
@@ -219,6 +226,14 @@ def _fig_observacoes_pc1(pc1, classes, config):
     )
 
     return fig
+
+
+
+
+
+
+
+
 
 def _fig_1d(z, y, idx, config, selecao, variancia):
     """Correlacoes de todas as variaveis preprocessadas com PC1."""
@@ -346,22 +361,174 @@ def _fig_1d(z, y, idx, config, selecao, variancia):
     return fig
 
 
+
+
+
 def _fig_2d(z, y, idx, config, selecionadas, variancia):
-    fig, (ax, av) = plt.subplots(1, 2, figsize=(16, 7.8))
+    """Biplot PCA 2D com todas as variaveis e tabela completa."""
+
+    n = len(selecionadas)
+
+    if n == 0:
+        raise ValueError("Biplot PCA 2D sem variaveis.")
+
+    # Distribuir todas as variaveis entre duas tabelas.
+    linhas_por_coluna = (n + 1) // 2
+
+    # Altura adaptativa ao numero de variaveis.
+    altura = max(10.0, 7.0 + 0.28 * linhas_por_coluna)
+
+    fig = plt.figure(figsize=(20.0, altura))
+
+    grade = fig.add_gridspec(
+        2, 2,
+        height_ratios=[
+            6.5,
+            max(3.5, 0.27 * linhas_por_coluna)
+        ],
+        left=0.055,
+        right=0.970,
+        top=0.920,
+        bottom=0.055,
+        hspace=0.32,
+        wspace=0.22
+    )
+
+    # =====================================================
+    # PAINEL A — SCORES PCA E VETORES DAS VARIAVEIS
+    # =====================================================
+
+    ax = fig.add_subplot(grade[0, 0])
+
     _scatter(ax, z, y, idx, config, d=2)
-    spans = [np.ptp(z[idx, j]) for j in range(2)]
-    fator = _setas_2d(ax, selecionadas, spans)
-    ax.set(xlabel=f'PC1 ({variancia[0]:.2%})', ylabel=f'PC2 ({variancia[1]:.2%})',
-           title=f'Scores PCA + setas ampliadas (fator visual {fator:.3g})')
-    ax.axhline(0, lw=.5, color='grey'); ax.axvline(0, lw=.5, color='grey')
-    ax.legend(loc='best'); ax.grid(alpha=.2)
+
+    spans = [
+        np.ptp(z[idx, j])
+        for j in range(2)
+    ]
+
+    fator = _setas_2d(
+        ax,
+        selecionadas,
+        spans
+    )
+
+    ax.set_xlabel(f"PC1 ({variancia[0]:.2%})")
+    ax.set_ylabel(f"PC2 ({variancia[1]:.2%})")
+
+    ax.set_title(
+        "A — Projecao PCA e vetores das variaveis",
+        fontsize=12,
+        fontweight="bold",
+        pad=12
+    )
+
+    ax.axhline(0, color="grey", linewidth=0.6)
+    ax.axvline(0, color="grey", linewidth=0.6)
+
+    ax.legend(loc="best", fontsize=9)
+    ax.grid(alpha=0.18)
+
+    # =====================================================
+    # PAINEL B — CIRCULO DE CORRELACOES
+    # =====================================================
+
+    av = fig.add_subplot(grade[0, 1])
+
     _circulo(av, selecionadas)
-    itens = [f'V{i}={r["variavel_preprocessada"]}'
-             for i, (_, r) in enumerate(selecionadas.iterrows(), start=1)]
-    legenda = '\n'.join('   |   '.join(itens[j:j+3]) for j in range(0, len(itens), 3))
-    fig.text(.5,.02,legenda,ha='center',fontsize=8,wrap=True)
-    fig.suptitle('Biplot PCA 2D — desenvolvimento F1–F9', fontweight='bold')
-    fig.tight_layout(rect=[0,.08,1,.95]); return fig
+
+    av.set_title(
+        "B — Circulo de correlacoes PC1 x PC2",
+        fontsize=12,
+        fontweight="bold",
+        pad=12
+    )
+
+    # =====================================================
+    # TABELAS — TODAS AS VARIAVEIS
+    # =====================================================
+
+    for coluna in range(2):
+
+        inicio = coluna * linhas_por_coluna
+        fim = min(inicio + linhas_por_coluna, n)
+
+        bloco = selecionadas.iloc[inicio:fim]
+
+        ax_tab = fig.add_subplot(grade[1, coluna])
+        ax_tab.axis("off")
+
+        linhas = []
+
+        for numero, (_, r) in enumerate(
+            bloco.iterrows(),
+            start=inicio + 1
+        ):
+
+            nome = str(r["variavel_preprocessada"])
+            c1 = float(r["corr_PC1"])
+            c2 = float(r["corr_PC2"])
+
+            linhas.append([
+                f"V{numero}",
+                nome,
+                f"{c1:+.7f}",
+                f"{c2:+.7f}"
+            ])
+
+        tabela = ax_tab.table(
+            cellText=linhas,
+            colLabels=[
+                "ID",
+                "Variavel preprocessada",
+                "Corr. PC1",
+                "Corr. PC2"
+            ],
+            colWidths=[0.08, 0.52, 0.20, 0.20],
+            cellLoc="left",
+            colLoc="left",
+            bbox=[0, 0, 1, 0.96]
+        )
+
+        tabela.auto_set_font_size(False)
+
+        tabela.set_fontsize(
+            8.0 if n <= 30 else 7.2
+        )
+
+        for (linha, coluna_celula), celula in tabela.get_celld().items():
+
+            celula.set_edgecolor("#dce3eb")
+            celula.set_linewidth(0.4)
+
+            if linha == 0:
+                celula.set_facecolor("#e7edf5")
+                celula.get_text().set_weight("bold")
+
+            elif linha % 2 == 0:
+                celula.set_facecolor("#f7f9fc")
+
+        ax_tab.set_title(
+            f"Variaveis V{inicio + 1} a V{fim}",
+            fontsize=10,
+            fontweight="bold",
+            pad=8
+        )
+
+    # =====================================================
+    # TITULO GERAL
+    # =====================================================
+
+    fig.suptitle(
+        "BIPLOT PCA 2D — TODAS AS VARIAVEIS",
+        fontsize=16,
+        fontweight="bold",
+        y=0.975
+    )
+
+    return fig
+
+
 
 
 def _fig_3d(z, y, idx, config, selecionadas, variancia):
@@ -572,6 +739,176 @@ def _fig_coeficientes_pc1(tabela):
 
     return fig
 
+
+def _fig_coeficientes_2d(tabela):
+    """Coeficientes das combinacoes lineares PC1 e PC2."""
+
+    from matplotlib.ticker import FuncFormatter
+
+    exigidas = {
+        "variavel_preprocessada",
+        "coeficiente_PC1",
+        "coeficiente_PC2"
+    }
+
+    if tabela.empty or not exigidas.issubset(tabela.columns):
+        raise ValueError("Tabela de coeficientes PCA 2D invalida.")
+
+    nomes = tabela["variavel_preprocessada"].astype(str).tolist()
+
+    valores = tabela[
+        ["coeficiente_PC1", "coeficiente_PC2"]
+    ].to_numpy(dtype=float)
+
+    if not np.isfinite(valores).all():
+        raise ValueError("Coeficientes PCA 2D nao finitos.")
+
+    n = len(nomes)
+    altura = max(7.0, 2.4 + 0.43 * n)
+
+    fig, eixos = plt.subplots(
+        1, 2,
+        figsize=(22, altura),
+        sharey=True
+    )
+
+    posicoes = np.arange(n)
+    mapa_cores = _mapa_cores_variaveis_pca(nomes)
+
+    max_abs = max(float(np.max(np.abs(valores))), 0.05)
+    limite = max_abs * 1.50
+    deslocamento = max_abs * 0.06
+
+    for j, ax in enumerate(eixos):
+
+        componente = f"PC{j + 1}"
+
+        ax.axvline(
+            0,
+            color="#707a89",
+            linewidth=1.0
+        )
+
+        for i, nome in enumerate(nomes):
+
+            valor = float(valores[i, j])
+            cor = mapa_cores[nome]
+
+            ax.annotate(
+                "",
+                xy=(valor, i),
+                xytext=(0, i),
+                arrowprops={
+                    "arrowstyle": "-|>",
+                    "color": cor,
+                    "lw": 1.9,
+                    "mutation_scale": 11
+                }
+            )
+
+            valor_exibido = (
+                0.0 if abs(valor) < 0.00000005 else valor
+            )
+
+            ax.text(
+                valor + (
+                    deslocamento if valor >= 0
+                    else -deslocamento
+                ),
+                i,
+                f"{valor_exibido:+.7f}",
+                ha="left" if valor >= 0 else "right",
+                va="center",
+                fontsize=8,
+                color=cor
+            )
+
+        ax.set_xlim(-limite, limite)
+        ax.set_ylim(n - 0.85, -0.85)
+
+        ax.set_xlabel(
+            f"Coeficiente na combinacao linear da {componente}",
+            fontsize=11,
+            labelpad=11
+        )
+
+        ax.set_title(
+            f"COEFICIENTES DA {componente}",
+            fontsize=15,
+            fontweight="bold",
+            pad=16
+        )
+
+        ax.set_xticks(
+            np.linspace(-max_abs, max_abs, 5)
+        )
+
+        ax.xaxis.set_major_formatter(
+            FuncFormatter(
+                lambda valor, pos:
+                f"{0.0 if abs(valor) < 0.00000005 else valor:.7f}"
+            )
+        )
+
+        ax.grid(
+            axis="x",
+            linestyle=":",
+            alpha=0.23
+        )
+
+        ax.set_axisbelow(True)
+
+        ax.tick_params(
+            axis="x",
+            labelsize=8
+        )
+
+    # Os nomes aparecem uma vez, com linhas alinhadas
+    # entre os dois paines.
+    eixos[0].set_yticks(
+        posicoes,
+        labels=nomes
+    )
+
+    eixos[0].tick_params(
+        axis="y",
+        labelsize=9,
+        length=0,
+        pad=7
+    )
+
+    eixos[1].tick_params(
+        axis="y",
+        left=False,
+        labelleft=False
+    )
+
+    fig.suptitle(
+        "COEFICIENTES DAS COMBINACOES LINEARES / PCA 2D",
+        fontsize=17,
+        fontweight="bold",
+        x=0.60,
+        y=0.995,
+        ha="center"
+    )
+
+    fig.subplots_adjust(
+        left=0.23,
+        right=0.97,
+        top=1 - 0.75 / altura,
+        bottom=min(0.12, 0.95 / altura),
+        wspace=0.22
+    )
+
+    return fig
+
+
+
+
+
+
+
+
 def gerar(config, data, destino, ext, dpi, csv):
     """Produz grafico correspondente a dimensionalidade PCA e CSV completo."""
     x, coord, modelo, y = _entrada(data)
@@ -580,18 +917,37 @@ def gerar(config, data, destino, ext, dpi, csv):
 
     tab = tabela_correlacoes(data)
 
+
+
+
+
+
+
     if coord.shape[1] == 1:
-        # PCA 1D: exibir todas as variaveis preprocessadas
+        # PCA 1D: preservar exatamente a selecao aprovada.
         selecao = tab.sort_values(
             ['relevancia_no_espaco', 'variavel_preprocessada'],
             ascending=[False, True],
             kind='stable'
         )
 
+    elif coord.shape[1] == 2:
+        # PCA 2D: incluir todas as variaveis preprocessadas.
+        selecao = tab.sort_values(
+            ['relevancia_no_espaco', 'variavel_preprocessada'],
+            ascending=[False, True],
+            kind='stable'
+        ).reset_index(drop=True)
+
     else:
-        # PCA 2D/3D: preservar a selecao original
+        # PCA 3D: manter comportamento anterior.
         max_setas = int(opts.get('max_setas', 6))
         selecao = _principais(tab, max_setas)
+
+
+
+
+
 
 
     limite = int(config['visualizacao']['geometria'].get('pontos_maximos_amostra', 20000))
@@ -704,8 +1060,71 @@ def gerar(config, data, destino, ext, dpi, csv):
                 Path(destino) / f'{nome_coeficientes}.csv'
             )
 
+    # =====================================================
+    # COEFICIENTES DAS COMBINACOES LINEARES — PCA 2D
+    # =====================================================
+
+    if dim == 2:
+
+        coef = np.asarray(
+            modelo.components_[:2, :],
+            dtype=float
+        ).T
+
+        if (
+            coef.shape != (len(x.columns), 2)
+            or not np.isfinite(coef).all()
+        ):
+            raise ValueError(
+                "Coeficientes PCA 2D invalidos ou desalinhados."
+            )
+
+        tabela_coef_2d = pd.DataFrame({
+            "variavel_preprocessada": list(x.columns),
+            "coeficiente_PC1": coef[:, 0],
+            "coeficiente_PC2": coef[:, 1]
+        })
+
+        tabela_coef_2d["magnitude_conjunta"] = (
+            np.linalg.norm(coef, axis=1)
+        )
+
+        tabela_coef_2d = tabela_coef_2d.sort_values(
+            ["magnitude_conjunta", "variavel_preprocessada"],
+            ascending=[False, True],
+            kind="stable"
+        ).reset_index(drop=True)
+
+        mapa_cores = _mapa_cores_variaveis_pca(
+            x.columns
+        )
+
+        tabela_coef_2d["cor_hex"] = (
+            tabela_coef_2d["variavel_preprocessada"]
+            .map(mapa_cores)
+        )
+
+        figura_coef_2d = _fig_coeficientes_2d(
+            tabela_coef_2d
+        )
+
+        nome_coef_2d = "PCA_COEFICIENTES_PC1_PC2"
+
+        vis._salvar(
+            figura_coef_2d,
+            Path(destino) / f"{nome_coef_2d}.{ext}",
+            dpi=dpi
+        )
+
+        if csv:
+            vis._csv_protegido(
+                tabela_coef_2d,
+                Path(destino) / f"{nome_coef_2d}.csv"
+            )
+
     if csv:
         vis._csv_protegido(tab, Path(destino) / f'{base}_correlacoes.csv')
+
         coords = coord.iloc[idx].copy()
         coords['classe_real'] = y[idx]
         coords.insert(0, 'indice_linha_desenvolvimento', np.asarray(coord.index)[idx])

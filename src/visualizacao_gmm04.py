@@ -213,9 +213,83 @@ def gerar(config, data, destino, ext, dpi, csv):
         dom,gamma=calcular_dominancia(gm,malha)
         z=dom.reshape(n2,n2)
         ax.pcolormesh(xx,yy,z,cmap=mapa,vmin=-.5,vmax=k-.5,shading='auto',rasterized=True)
+
+
+
+        if d == 2:
+            from scipy.stats import multivariate_normal, chi2
+
+            pontos = np.column_stack((xx.ravel(), yy.ravel()))
+            densidade_total = np.zeros_like(xx, dtype=float)
+
+            for g in range(k):
+                cov = np.asarray(
+                    geo._covariancia(gm, g)[:2, :2],
+                    dtype=float
+                )
+
+                peso = float(p.weights_[g])
+
+                distribuicao = multivariate_normal(
+                    mean=p.means_[g, :2],
+                    cov=cov,
+                    allow_singular=False
+                )
+
+                densidade = (
+                    peso * distribuicao.pdf(pontos)
+                ).reshape(xx.shape)
+
+                densidade_total += densidade
+
+                # Contornos de concentracao de 50% e 95%.
+                pico = peso * distribuicao.pdf(p.means_[g, :2])
+
+                niveis = np.sort(
+                    pico * np.exp(
+                        -0.5 * chi2.ppf([0.50, 0.95], df=2)
+                    )
+                )
+
+                for nivel in niveis:
+                    if densidade.min() < nivel < densidade.max():
+                        ax.contour(
+                            xx, yy, densidade,
+                            levels=[float(nivel)],
+                            colors=[cores[g]],
+                            linestyles='--',
+                            linewidths=1.35,
+                            alpha=.95
+                        )
+
+            # Curvas de nivel da densidade total da mistura.
+            pico_total = float(densidade_total.max())
+
+            if pico_total > 0:
+                niveis_total = (
+                    pico_total * np.array([.18, .35, .55, .75])
+                )
+
+                ax.contour(
+                    xx, yy, densidade_total,
+                    levels=niveis_total,
+                    colors=['#172b46'],
+                    linestyles='-',
+                    linewidths=.9,
+                    alpha=.55
+                )
+
+        # Fronteiras entre gaussianas dominantes.
         if z.min()!=z.max():
-            # Frontiers between discrete argmax regions, not risk thresholds.
-            ax.contour(xx,yy,z,levels=np.arange(.5,k-.5,1.),colors=['#172b46'],linewidths=.85)
+            ax.contour(
+                xx, yy, z,
+                levels=np.arange(.5, k-.5, 1.),
+                colors=['#172b46'],
+                linewidths=1.8
+            )
+
+
+
         if len(idx):
             ax.scatter(X[idx,i],X[idx,j],s=5,c='#344359',alpha=.18,rasterized=True)
         for g,nome in enumerate(nomes):
@@ -228,8 +302,13 @@ def gerar(config, data, destino, ext, dpi, csv):
             ax.set_title(f'{nomes_dim[i]} × {nomes_dim[j]}\n'
                          f'{nomes_dim[fixado]} fixada na média = {centro_desenvolvimento[fixado]:.3g}',
                          fontsize=10.2,pad=10)
+            
         else:
-            ax.set_title(f'{nomes_dim[i]} × {nomes_dim[j]}',fontsize=12,pad=12)
+            # O subtitulo principal ja identifica PC1 e PC2.
+            ax.set_title('')
+
+
+
         if csv:
             stem_csv='GMM04_malha_'+nomes_dim[i]+'_'+nomes_dim[j]
             tabela=pd.DataFrame({nomes_dim[i]:xx.ravel(),nomes_dim[j]:yy.ravel(),
@@ -239,17 +318,103 @@ def gerar(config, data, destino, ext, dpi, csv):
             for g,nome in enumerate(nomes): tabela[f'responsabilidade_{nome}']=gamma[:,g]
             geo._salvar_dados(tabela,destino,stem_csv,True)
 
-    fig.suptitle(f'GMM 04 — Regiões de dominância | {d}D | {p.covariance_type.upper()}',
-                 fontsize=15.5,fontweight='bold',y=.975)
-    fig.legend(handles=_legenda(nomes,cores,pontos=bool(len(idx))),
-               loc='upper center',bbox_to_anchor=(.5,.917),ncol=min(k+2,6),
-               fontsize=9,frameon=False)
-    texto=('Os centros e as observações são projeções; a dominância é calculada em cortes '
-           'com a dimensão omitida fixada na média.' if d==3 else
-           'Fronteiras = mudança da gaussiana de maior responsabilidade.')
-    fig.text(.5,.065,texto,ha='center',fontsize=9.1,color='#293c54')
-    fig.text(.5,.033,f'Dominância entre componentes ≠ fronteira fraude/não fraude. {origem}.',
-             ha='center',fontsize=8.8,color='#43556d')
-    fig.subplots_adjust(left=.065 if d==3 else .1,right=.985 if d==3 else .95,
-                        top=.79,bottom=.16,wspace=.24)
+
+
+
+
+    if d == 2:
+        fig.suptitle(
+            'REGIÕES DE DOMINÂNCIA DAS GAUSSIANAS',
+            fontsize=16,
+            fontweight='bold',
+            y=.975
+        )
+
+        fig.text(
+            .5,
+            .925,
+            f'{nomes_dim[0]} × {nomes_dim[1]} | '
+            f'{p.covariance_type.upper()} | 2D',
+            ha='center',
+            fontsize=11,
+            color='#46556e'
+        )
+
+        itens_legenda = _legenda(
+            nomes, cores, pontos=bool(len(idx))
+        )
+
+        itens_legenda.extend([
+            Line2D(
+                [], [],
+                color=cores[0],
+                ls='--',
+                lw=1.5,
+                label='Isodensidade gaussiana (50% / 95%)'
+            ),
+            Line2D(
+                [], [],
+                color='#172b46',
+                ls='-',
+                lw=1,
+                alpha=.55,
+                label='Densidade total da mistura'
+            )
+        ])
+
+        fig.legend(
+            handles=itens_legenda,
+            loc='upper center',
+            bbox_to_anchor=(.5, .886),
+            ncol=4,
+            fontsize=8.5,
+            frameon=False
+        )
+
+    else:
+        # Preserva a apresentacao original do PCA 3D.
+        fig.suptitle(
+            f'GMM 04 — Regiões de dominância | '
+            f'{d}D | {p.covariance_type.upper()}',
+            fontsize=15.5,
+            fontweight='bold',
+            y=.975
+        )
+
+        fig.legend(
+            handles=_legenda(
+                nomes, cores, pontos=bool(len(idx))
+            ),
+            loc='upper center',
+            bbox_to_anchor=(.5, .917),
+            ncol=min(k+2, 6),
+            fontsize=9,
+            frameon=False
+        )
+
+
+
+    
+    
+    # Sem rodape inferior
+
+    
+    # RODAPE_RESTAURADO_PCA2D_GMM04
+    if d == 2:
+        fig.text(
+            .5, .045,
+            'Regiões coloridas: gaussiana dominante  |  '
+            'Curvas tracejadas: isodensidades gaussianas 50% / 95%  |  '
+            '×: médias gaussianas',
+            ha='center', fontsize=9.3, color='#46556e'
+        )
+
+    fig.subplots_adjust(
+        left=.065 if d==3 else .1,
+        right=.985 if d==3 else .95,
+        top=.76 if d==2 else .79,
+        bottom=.145 if d == 2 else .10,
+        wspace=.24
+    )
+    
     geo._guardar(fig,destino,f'GMM04_dominancia_{d}d',ext,dpi)

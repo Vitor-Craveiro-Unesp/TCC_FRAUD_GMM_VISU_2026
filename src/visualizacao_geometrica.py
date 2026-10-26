@@ -613,20 +613,21 @@ def _scree(config, data, dest, ext, dpi, csv, *, origem='desenvolvimento'):
                               ls='--', label=f'PCA selecionado: {nsel}'))
     fig.legend(handles=legenda, ncol=3, loc='upper center',
                bbox_to_anchor=(.5, .905), fontsize=9.4, frameon=False)
-    _exigir(origem in ('desenvolvimento', 'simulado'),
-            'Origem do Scree PCA desconhecida.')
-    nota = ('PRÉVIA SINTÉTICA: dados simulados; sem métricas OOF reais.'
-            if origem == 'simulado' else
-            'Espectro diagnóstico calculado apenas no desenvolvimento F1–F9.')
-    fig.text(.5, .035,
-             nota + ' Variância explicada não mede separação de fraudes; F10 não utilizado.',
-             ha='center', fontsize=8.7, color='#506079')
+
+
+    
+    _exigir(
+        origem in ('desenvolvimento', 'simulado'),
+        'Origem do Scree PCA desconhecida.'
+    )
+
+    
 
     fig.subplots_adjust(
         left=.105,
         right=.88,
         top=.83,
-        bottom=.15
+        bottom=.10
     )
 
     _guardar(fig, dest, '11_pca_cotovelo', ext, dpi)
@@ -923,18 +924,42 @@ def _pca_projecao_2d3d(config, data, dest, ext, dpi, csv, op, *, origem='desenvo
                      marcador='o', titulo=f'G{int(k)+1} (n={len(indices):,} exibidas)',
                      alpha=.52, tamanho=11)
         descricao = 'Dominância por responsabilidade GMM; não é classe de fraude'
-    # Preserva os contornos opcionais do PCA 2D sem atribuir cobertura 95%.
+
+
+
+    # PCA 2D: elipses de concentracao de 95% do GMM FULL.
     if d == 2 and op.get('mostrar_contornos_gaussianas', False):
+        from scipy.stats import chi2
+
         gm = data['gmm']
+        raio = np.sqrt(chi2.ppf(0.95, df=2))
+
         for k in range(len(gm.saidas_)):
             cov = _covariancia(gm, k)[:2, :2]
             eig, V = np.linalg.eigh(cov)
+
             if (eig > 0).all():
-                theta = np.degrees(np.arctan2(V[1, 1], V[0, 1]))
-                ax.add_patch(Ellipse(gm.modelo_.means_[k, :2],
-                             width=4*np.sqrt(eig[1]), height=4*np.sqrt(eig[0]),
-                             angle=theta, facecolor='none',
-                             edgecolor=plt.get_cmap('tab10')(k % 10), alpha=.48))
+                theta = np.degrees(
+                    np.arctan2(V[1, 1], V[0, 1])
+                )
+
+                ax.add_patch(Ellipse(
+                    gm.modelo_.means_[k, :2],
+                    width=2 * raio * np.sqrt(eig[1]),
+                    height=2 * raio * np.sqrt(eig[0]),
+                    angle=theta,
+                    facecolor='none',
+                    linestyle=(0, (4, 3)),
+                    linewidth=1.8,
+                    edgecolor=plt.get_cmap('tab10')(k % 10),
+                    alpha=0.95
+                ))
+
+
+
+
+
+
     ax.set_xlabel(f'PC1 (variância: {ratios[0]:.1%})', labelpad=9)
     ax.set_ylabel(f'PC2 (variância: {ratios[1]:.1%})', labelpad=9)
     if d == 3:
@@ -944,23 +969,39 @@ def _pca_projecao_2d3d(config, data, dest, ext, dpi, csv, op, *, origem='desenvo
     else:
         ax.grid(alpha=.15, linestyle=':')
     total = sum(float(v) for v in ratios)
-    titulo = f'12 — PCA {d}D | Projeção PC1 × PC2' + (' × PC3' if d == 3 else '')
+    titulo = f'PCA {d}D | Projeção PC1 × PC2' + (' × PC3' if d == 3 else '')
     ax.set_title(titulo + f' | variância acumulada: {total:.1%}', pad=15)
+
+
     handles, labels = ax.get_legend_handles_labels()
+
+    if d == 2 and op.get('mostrar_contornos_gaussianas', False):
+        from matplotlib.lines import Line2D
+
+        for k, nome in enumerate(data['gmm'].saidas_):
+            handles.append(
+                Line2D(
+                    [0], [0],
+                    color=plt.get_cmap('tab10')(k % 10),
+                    linestyle=(0, (4, 3)),
+                    linewidth=1.8
+                )
+            )
+            labels.append(f'{nome} — Elipse gaussiana 95%')
+
     if handles:
-        ax.legend(loc='best' if d == 2 else 'upper left', fontsize=8)
-    nota = f'{descricao}. Desenvolvimento F1–F9; F10 não utilizado.'
-    if d == 3 and op.get('mostrar_contornos_gaussianas', False):
-        nota += ' Elipsoides GMM não exibidos neste painel PCA.'
-    if len(idx) < len(y):
-        nota += f' Exibição amostrada: {len(idx):,} de {len(y):,} pontos; CSV completo.'
-    if origem == 'simulado':
-        nota = 'PRÉVIA SINTÉTICA: PCA ajustado em dados simulados. ' + nota
-    fig.text(.5, .035, nota, ha='center', fontsize=7.3, color='#46566a')
+        ax.legend(
+            handles=handles,
+            labels=labels,
+            loc='best' if d == 2 else 'upper left',
+            fontsize=8
+        )
     if d == 2:
-        fig.subplots_adjust(top=.88, bottom=.18)
+        fig.subplots_adjust(top=.88, bottom=.10)
     else:
         fig.subplots_adjust(left=.04, right=.94, bottom=.12, top=.9)
+
+
     nome = '12_pca_projecao_PC1_PC2' + ('_PC3' if d == 3 else '')
     _guardar(fig, dest, nome, ext, dpi)
     if csv:
@@ -1532,9 +1573,14 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
                                          ec=cor, fc='none', ls='--', lw=1.6))
                     ax.plot(centro[0], centro[1], marker='x',
                             color=cor, ms=7, mew=2)
-            # A mudanca e XOR(score>=.50, score>=tau_star): mostrar apenas
-            # na coluna MCC; nao alterar scores nem probabilidades.
-            if tipo == 'mcc' and mudou.any():
+
+
+
+                    
+            # A regiao de mudanca usa os mesmos scores nos dois paineis 2D.
+            # Em 3D, manter a hachura apenas na coluna MCC.
+            if (dim == 2 or tipo == 'mcc') and mudou.any():
+
                 h = ax.contourf(xx, yy, mudou.astype(float), levels=[.5, 1.5],
                                 colors='none', hatches=['////'])
                 h.set_edgecolor('#ffd247')
@@ -1555,31 +1601,65 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
                     f'Corte {nomes[par[0]]} × {nomes[par[1]]}\n'
                     f'{nomes[omitida]} fixada na média do desenvolvimento = '
                     f'{fixos[omitida]:.3g}', fontsize=9.5, pad=10)
+                
             else:
-                ax.set_title(f'Corte {nomes[par[0]]} × {nomes[par[1]]}',
-                             fontsize=10)
-    # Barra única e mesma escala de risco em todos os 2 ou 6 painéis.
-    cax = fig.add_axes([.91, .26 if dim == 3 else .25, .012,
-                        .47 if dim == 3 else .48])
+                titulo_corte = 'CORTE FIXO' if tipo == 'fixo' else 'LIMIAR ÓTIMO DO MCC'
+                simbolo_tau = 'τ' if tipo == 'fixo' else 'τ*'
+                ax.set_title(
+                    f'{titulo_corte} | {simbolo_tau} = {tau:.7f}\n'
+                    f'{nome_mcc} = {mcc:.7f}',
+                    fontsize=11.5,
+                    fontweight='medium',
+                    pad=12
+                )
+
+
+
+
+                
+    # Mesma escala de risco nos dois cortes.
+    if dim == 2:
+        cax = fig.add_axes([.905, .155, .012, .605])
+    else:
+        cax = fig.add_axes([.91, .26, .012, .47])
     fig.colorbar(quad, cax=cax,
                  label='Probabilidade estimada de fraude (mesma escala)')
 
-    fig.suptitle(f'GMM 08 — Mapa de risco e geometria 95% | '
-                 f'{gm.modelo_.covariance_type.upper()} | {dim}D',
-                 fontsize=16, fontweight='bold', y=.984)
-    # Titulos das colunas identificam a ORIGEM correta dos MCCs.
-    fig.text(.265, .937, f'Limiar fixo τ=0,50  |  {nome_mcc}={mcc_fixo:.5f}',
-             ha='center', fontsize=12, weight='bold', color='#23334a')
-    fig.text(.685, .937, f'Limiar ótimo τ*={tau_star:.6g}  |  '
-             f'{nome_mcc}={mcc_otimo:.5f}',
-             ha='center', fontsize=12, weight='bold', color='#23334a')
+    if dim == 2:
+        fig.suptitle(
+            'MAPA DE RISCO E GEOMETRIA GAUSSIANA (95%)',
+            fontsize=17, fontweight='bold', y=.987
+        )
+        fig.text(.5, .921,
+                 f'{gm.modelo_.covariance_type.upper()} | 2D',
+                 ha='center', fontsize=11, color='#5a6c84')
+    else:
+        fig.suptitle(f'GMM 08 — Mapa de risco e geometria 95% | '
+                     f'{gm.modelo_.covariance_type.upper()} | {dim}D',
+                     fontsize=16, fontweight='bold', y=.984)
+        fig.text(.265, .937,
+                 f'Limiar fixo τ=0,50  |  {nome_mcc}={mcc_fixo:.5f}',
+                 ha='center', fontsize=12, weight='bold', color='#23334a')
+        fig.text(.685, .937,
+                 f'Limiar ótimo τ*={tau_star:.6g}  |  '
+                 f'{nome_mcc}={mcc_otimo:.5f}',
+                 ha='center', fontsize=12, weight='bold', color='#23334a')
+
+
+    
 
     from matplotlib.lines import Line2D
     from matplotlib.patches import Patch
     legenda = [
         Line2D([0], [0], color='black', lw=2, label='Fronteira de decisão'),
+
+
         Patch(facecolor='none', edgecolor='#d6a915', hatch='////',
-              label='Mudança entre os cortes (coluna MCC)'),
+              label=('Região de mudança' if dim == 2
+                     else 'Mudança entre os cortes (coluna MCC)')),
+
+
+
         Line2D([0], [0], ls='', marker='o', color='#4389c2',
                label='Legítimas — pontos projetados'),
         Line2D([0], [0], ls='', marker='*', color='#d62728',
@@ -1590,24 +1670,53 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
                        color=plt.get_cmap('tab10')(k % 10), ls='--', lw=1.8,
                        label=f'{nome} — seção 95%')
                        for k, nome in enumerate(gm.saidas_))
+
+        
     fig.legend(handles=legenda, loc='upper center',
-               bbox_to_anchor=(.49, .897), ncol=min(6, len(legenda)),
+               bbox_to_anchor=(.49, .868 if dim == 2 else .897),
+               ncol=min(6, len(legenda)),
                frameon=False, fontsize=8.4, columnspacing=1.1)
 
-    direcao = ('Legítima → fraude' if tau_star < .5 else
-               'Fraude → legítima' if tau_star > .5 else 'Nenhuma mudança')
-    fig.text(.49, .075, f'Hachura amarela: mudança de classe ({direcao}); '
-             'mesma superfície de risco nos dois limiares.',
-             fontsize=9.4, ha='center', color='#23334a', weight='bold')
-    fig.text(.49, .050, f'{nota_mcc}. '
-             + ('Os planos 3D fixam a coordenada omitida na média de F1–F9.'
-                if dim == 3 else 'Visualização do desenvolvimento F1–F9.'),
-             fontsize=8.5, ha='center', color='#4a5970')
-    fig.text(.49, .027, 'Elipses tracejadas: seções de gaussianas FULL 95%, '
-             'não regiões classificadas como fraude. F10 não utilizado.',
-             fontsize=8.2, ha='center', color='#4a5970')
-    fig.subplots_adjust(left=.07, right=.875, top=.82, bottom=.145,
+
+
+    if dim == 3:
+        # Preservar os rodapes da visualizacao 3D.
+        direcao = ('Legítima → fraude' if tau_star < .5 else
+                   'Fraude → legítima' if tau_star > .5 else 'Nenhuma mudança')
+        fig.text(.49, .075, f'Hachura amarela: mudança de classe ({direcao}); '
+                 'mesma superfície de risco nos dois limiares.',
+                 fontsize=9.4, ha='center', color='#23334a', weight='bold')
+        fig.text(.49, .050, f'{nota_mcc}. '
+                 'Os planos 3D fixam a coordenada omitida na média de F1–F9.',
+                 fontsize=8.5, ha='center', color='#4a5970')
+        fig.text(.49, .027, 'Elipses tracejadas: seções de gaussianas FULL 95%, '
+                 'não regiões classificadas como fraude. F10 não utilizado.',
+                 fontsize=8.2, ha='center', color='#4a5970')
+
+    # RODAPE_RESTAURADO_PCA2D_GMM08
+    if dim == 2:
+        direcao_2d = (
+            'legítima → fraude' if tau_star < .5 else
+            'fraude → legítima' if tau_star > .5 else
+            'nenhuma mudança'
+        )
+        fig.text(
+            .49, .050,
+            f'{nome_mcc}(τ=0.5000000) = {mcc_fixo:.7f}   |   '
+            f'{nome_mcc}(τ*={tau_star:.7f}) = {mcc_otimo:.7f}   |   '
+            f'Hachura: mudança de classe ({direcao_2d})',
+            fontsize=10.0, ha='center',
+            color='#23334a', fontweight='bold'
+        )
+
+    fig.subplots_adjust(left=.07, right=.875,
+                        top=.745 if dim == 2 else .82,
+                        bottom=.155 if dim == 2 else .145,
                         wspace=.23, hspace=.45 if dim == 3 else .27)
+
+
+
+    
     _guardar(fig, dest, f'GMM08_mapa_risco_{dim}d_comparativo', ext, dpi)
 
 

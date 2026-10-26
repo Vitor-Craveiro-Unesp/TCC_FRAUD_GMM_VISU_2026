@@ -509,6 +509,7 @@ visualizacao:
       gerar_em: ["teste_final"]  # Ajuste no desenvolvimento, nunca F10.
       pontos_curva: 600          # Resolucao apenas visual; nao e grid.
       margem_sigmas: 4.0        # Incluir caudas marginais das gaussianas.
+      pontos_grade_2d: 220
 
     # --------------------------------------------------------
     # GMM 04 — REGIOES DE DOMINANCIA DOS COMPONENTES (PDF)

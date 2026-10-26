@@ -266,7 +266,37 @@ def _verificar_geracoes(experimento,config,escolha,*,executar):
                 )
             )
 
-        return imagens_oof,imagens_geo
+        # =====================================================
+        # PCA 2D - VERIFICAR OS GRAFICOS ADICIONAIS
+        # =====================================================
+
+        metodo = escolha['configuracao']['metodo'].upper()
+
+        dim = int(
+            escolha['configuracao']['reducao']['n_components']
+        )
+
+        if metodo == 'PCA' and dim == 2:
+
+            adicionais_2d = []
+
+            if 'pca_biplot' in esperado_geo:
+                adicionais_2d.append(
+                    'PCA_COEFICIENTES_PC1_PC2'
+                )
+
+            if 'densidades_marginais' in esperado_geo:
+                adicionais_2d.extend([
+                    'GMM01_densidade_conjunta_2d_PC1_PC2',
+                    'GMM01_densidade_conjunta_superficie_PCA2D'
+                ])
+
+            imagens_geo = imagens_geo and all(
+                (geo_dir / f'{nome}{ext}').is_file()
+                for nome in adicionais_2d
+            )
+
+        return imagens_oof, imagens_geo
 
     tem_oof,tem_geo=completos()
     if executar and not tem_oof:
@@ -440,23 +470,61 @@ def integrar(experimento, *, planejar=False, complementar_2d=True):
 
 
                 if 'densidades_marginais' in ativos_geo:
+
                     dim = int(
                         escolha['configuracao']['reducao']['n_components']
                     )
+
+                    # Preservar todas as densidades marginais.
                     permitido = permitido or arq.stem.startswith(
                         f'GMM01_densidade_marginal_{dim}d_'
                     )
 
-                # Incluir os dois graficos adicionais do PCA 1D.
-                if 'pca_biplot' in ativos_geo:
+                    # Adicionar as duas representacoes conjuntas PCA 2D.
+                    if (
+                        dim == 2
+                        and escolha['configuracao']['metodo'].upper() == 'PCA'
+                    ):
+
+                        conjuntas_2d = {
+                            'GMM01_densidade_conjunta_2d_PC1_PC2',
+                            'GMM01_densidade_conjunta_superficie_PCA2D'
+                        }
+
+                        if arq.stem in conjuntas_2d:
+                            permitido = True
+
+
+
+
+
+                # =====================================================
+                # PCA - GRAFICOS ADICIONAIS POR DIMENSIONALIDADE
+                # =====================================================
+
+                if (
+                    'pca_biplot' in ativos_geo
+                    and escolha['configuracao']['metodo'].upper() == 'PCA'
+                ):
+
                     dim = int(
                         escolha['configuracao']['reducao']['n_components']
                     )
 
+                    # PCA 1D: preservar os dois graficos aprovados.
                     if dim == 1 and arq.stem in {
                         'PCA_COEFICIENTES_PC1',
                         'PCA_OBSERVACOES_PC1'
                     }:
+
+                        permitido = True
+
+                    # PCA 2D: adicionar os coeficientes PC1 e PC2.
+                    elif (
+                        dim == 2
+                        and arq.stem == 'PCA_COEFICIENTES_PC1_PC2'
+                    ):
+
                         permitido = True
 
 

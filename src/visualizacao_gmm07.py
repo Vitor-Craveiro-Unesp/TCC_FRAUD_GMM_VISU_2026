@@ -12,7 +12,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-from matplotlib.patches import Patch
+from matplotlib.patches import Patch, Ellipse
 import numpy as np
 import pandas as pd
 
@@ -178,19 +178,91 @@ def _grafico(config, data, escolha, planos, medias_fixas, *, destino, ext, dpi,
                                    color=opcao['cor'], marker='*' if classe == 1 else 'o',
                                    s=22 if classe == 1 else 8, alpha=.52 if classe == 1 else .24,
                                    rasterized=True, zorder=2)
-                if indice_corte == 1 and mudou.any():
-                    # Nenhum score é recalculado para a região hachurada.
-                    cs = ax.contourf(xx, yy, mudou.astype(float), levels=[.5, 1.5],
-                                     colors='none', hatches=['////'], zorder=3)
+
+
+                        
+                if (dimensoes == 2 or indice_corte == 1) and mudou.any():
+                    # Mesma zona de mudanca nos dois paineis 2D.
+                    cs = ax.contourf(
+                        xx, yy, mudou.astype(float),
+                        levels=[.5, 1.5],
+                        colors='none',
+                        hatches=['////'],
+                        zorder=3
+                    )
+
+
+                    
                     cs.set_edgecolor(hachura_amarela)
                     cs.set_linewidth(.15)
                 cruzou = float(np.min(campo)) <= limiar <= float(np.max(campo))
+
+
+
+
                 if cruzou:
-                    con = ax.contour(xx, yy, campo, levels=[limiar], colors=['#101010'],
-                                     linewidths=2, zorder=5)
-                    cruzou = any(len(segmento) for segmento in con.allsegs[0])
-                ax.set(xlim=(xx[0,0],xx[0,-1]),ylim=(yy[0,0],yy[-1,0]),
-                       xlabel=nomes[par[0]],ylabel=nomes[par[1]])
+                    con = ax.contour(
+                        xx, yy, campo,
+                        levels=[limiar],
+                        colors=['#101010'],
+                        linewidths=2,
+                        zorder=5
+                    )
+                    cruzou = any(
+                        len(segmento) for segmento in con.allsegs[0]
+                    )
+
+                # Elipses FULL de concentracao 95% somente no PCA 2D.
+                if dimensoes == 2:
+                    from scipy.stats import chi2
+
+                    raio_95 = float(
+                        np.sqrt(chi2.ppf(.95, df=2))
+                    )
+
+                    gm = data['gmm']
+
+                    for k in range(len(gm.saidas_)):
+                        cov = np.asarray(
+                            geo._covariancia(gm, k)[:2, :2],
+                            dtype=float
+                        )
+
+                        eig, V = np.linalg.eigh(cov)
+
+                        geo._exigir(
+                            np.isfinite(eig).all() and np.all(eig > 0),
+                            'Covariancia invalida nas elipses GMM07.'
+                        )
+
+                        angulo = np.degrees(
+                            np.arctan2(V[1, 1], V[0, 1])
+                        )
+
+                        ax.add_patch(
+                            Ellipse(
+                                xy=gm.modelo_.means_[k, :2],
+                                width=2 * raio_95 * np.sqrt(eig[1]),
+                                height=2 * raio_95 * np.sqrt(eig[0]),
+                                angle=angulo,
+                                fill=False,
+                                linestyle=(0, (5, 3)),
+                                linewidth=1.7,
+                                edgecolor=plt.get_cmap('tab10')(k % 10),
+                                alpha=.95,
+                                zorder=6
+                            )
+                        )
+
+                ax.set(
+                    xlim=(xx[0, 0], xx[0, -1]),
+                    ylim=(yy[0, 0], yy[-1, 0]),
+                    xlabel=nomes[par[0]],
+                    ylabel=nomes[par[1]]
+                )
+
+
+
             if not cruzou:
 
 
@@ -252,13 +324,26 @@ def _grafico(config, data, escolha, planos, medias_fixas, *, destino, ext, dpi,
 
         cax=fig.add_axes([.91,.22,.012,.59])
         fig.colorbar(quad,cax=cax,label='Score conjunto s(x) — mesma escala')
-    else:
-        fig.subplots_adjust(left=.075,right=.88 if dimensoes==2 else .985,
-                            top=.76,bottom=.19,wspace=.22)
-        if dimensoes==2:
-            cax=fig.add_axes([.905,.205,.012,.56])
-            fig.colorbar(quad,cax=cax,label='Score conjunto s(x) — mesma escala')
 
+
+
+    else:
+        fig.subplots_adjust(
+            left=.075,
+            right=.88 if dimensoes == 2 else .985,
+            top=.76,
+            bottom=.12 if dimensoes == 2 else .19,
+            wspace=.22
+        )
+
+        if dimensoes == 2:
+            cax = fig.add_axes([.905, .12, .012, .64])
+
+            fig.colorbar(
+                quad,
+                cax=cax,
+                label='Score conjunto s(x) — mesma escala'
+            )
 
 
 
@@ -280,13 +365,21 @@ def _grafico(config, data, escolha, planos, medias_fixas, *, destino, ext, dpi,
 
 
 
-    # PCA 1D: remover Legítimas e Fraudes da legenda.
-    # PCA 2D/3D: manter as observações na legenda.
     if dimensoes == 1:
         legenda = legenda[:3]
     else:
         legenda.pop(2)
 
+    if dimensoes == 2:
+        legenda.append(
+            Line2D(
+                [0], [0],
+                color='#7b4fa8',
+                lw=1.7,
+                ls=(0, (5, 3)),
+                label='Elipses gaussianas 95%'
+            )
+        )
 
 
     fig.legend(
@@ -301,22 +394,27 @@ def _grafico(config, data, escolha, planos, medias_fixas, *, destino, ext, dpi,
 
 
 
-    direcao = (
-    'legítima → fraude' if tau_star < .5 else
-    'fraude → legítima' if tau_star > .5 else
-    'nenhuma mudança')
+    # Preservar o rodape original apenas para PCA 1D e PCA 3D.
+    # PCA 2D ja exibe o MCC acima de cada painel.
 
-    fig.text(
-    .5, .090,
-    f'{nome_mcc}(τ=0.5000000) = {mcc_fixo:.7f}   |   '
-    f'{nome_mcc}(τ*={tau_star:.7f}) = {mcc_otimo:.7f}   |   '
-    f'Mudança: {direcao}',
-    ha='center',
-    fontsize=10.2,
-    color='#1b3048',
-    fontweight='bold'
-    )
+    if dimensoes != 2:
 
+        direcao = (
+            'legítima → fraude' if tau_star < .5 else
+            'fraude → legítima' if tau_star > .5 else
+            'nenhuma mudança'
+        )
+
+        fig.text(
+            .5, .090,
+            f'{nome_mcc}(τ=0.5000000) = {mcc_fixo:.7f}   |   '
+            f'{nome_mcc}(τ*={tau_star:.7f}) = {mcc_otimo:.7f}   |   '
+            f'Mudança: {direcao}',
+            ha='center',
+            fontsize=10.2,
+            color='#1b3048',
+            fontweight='bold'
+        )
 
 
 
