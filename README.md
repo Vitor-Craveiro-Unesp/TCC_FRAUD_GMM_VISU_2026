@@ -161,12 +161,13 @@ Original high-dimensional data
           |                   |
           v                   v
 Linear representation   Visual representation
-          |
-          v
-         GMM
-          |
-          v
-Probabilistic clusters
-          |
+          |                   |
+          +---------+---------+
+                    |
+                    v
+                   GMM
+                    |
+                    v
+        Probabilistic clusters
           v
 Fraud distribution analysis
