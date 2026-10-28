@@ -1474,6 +1474,12 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
     Ambos os limiares partilham malha, campo de risco, escala e seções FULL
     das gaussianas de 95%. Só fronteira/hachura dependem do corte.
     """
+    # PCA3D_GMM08_OFICIAL: apenas PCA 3D usa o novo PNG + HTML.
+    if (data['coord'].shape[1] == 3
+            and list(data['coord'].columns) == ['PC1','PC2','PC3']):
+        from src.visualizacao_gmm08_3d import gerar_3d
+        return gerar_3d(config,data,escolha,dest,ext,dpi,csv,avaliacao=avaliacao)
+
     op = config['visualizacao']['graficos']['mapa_risco_fronteira']
     X = data['coord'].to_numpy(dtype=float)
     y = np.asarray(data['y'], dtype=np.uint8)

@@ -586,7 +586,7 @@ visualizacao:
       mostrar_dados_desenvolvimento: true
       mostrar_dados_teste: true
       colorir_por: "classe_real"        # Opcoes: classe_real, classe_predita, risco, gaussiana_dominante.
-      mostrar_contornos_gaussianas: true
+      mostrar_contornos_gaussianas: false
       usar_estilos_classes: true
       # A geometria depende do PCA FINAL, nao da combinacao de
       # PCs diferentes aprendidas nos 9 folds.

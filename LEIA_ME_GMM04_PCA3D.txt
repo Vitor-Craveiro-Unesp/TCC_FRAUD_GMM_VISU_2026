@@ -1,0 +1,40 @@
+INTEGRACAO OFICIAL GMM04 3D — TCC_EXPERIMENTAL_V3
+
+CONTEUDO DO ZIP
+- instalar_gmm04_pca3d.py
+- visualizacao_gmm04_3d.py
+- validar_integracao_gmm04_pca3d.py
+- LEIA_ME_GMM04_PCA3D.txt
+
+EXTRACAO
+Extraia OS QUATRO ARQUIVOS na raiz do projeto, ao lado de
+config_TCC_EXPERIMENTAL_V3_atualizado.yaml e da pasta src/.
+Nao mova manualmente visualizacao_gmm04_3d.py para src/; o instalador
+faz isso automaticamente e valida a versao existente.
+
+EXECUCAO, A PARTIR DA RAIZ:
+  .\.venv\Scripts\python.exe .\instalar_gmm04_pca3d.py
+  .\.venv\Scripts\python.exe .\validar_integracao_gmm04_pca3d.py
+
+O instalador cria backups de src/visualizacao_gmm04.py e
+src/visualizacao_integrada.py, e reverte modificacoes em caso de erro.
+Nao modifica YAML, datasets, F10, folds, OOF ou outputs anteriores.
+
+RESULTADOS DA VALIDACAO
+outputs/validacao_integracao_gmm04_pca3d_.../
+  PCA_1D/GMM04_dominancia_1d.png
+  PCA_2D/GMM04_dominancia_2d.png
+  PCA_3D/GMM04_dominancia_3d.png
+  PCA_3D/GMM04_dominancia_3d_INTERATIVA.html
+  PCA_3D/GMM04_dominancia_volume_3d.csv
+
+O HTML usa Plotly offline, com rotação automatica, zoom, planos
+PC1×PC2/PC1×PC3/PC2×PC3, posições de corte alteraveis, elipsoides
+FULL 95% e as responsabilidades gaussianas dos pontos volumetricos.
+
+IMPORTANTE
+Dominancia significa argmax da responsabilidade posterior do GMM,
+NAO e classificacao de fraude. O teste usa dados sintéticos e nao
+exercita uma execução completa de galerias reais com manifestos OOF.
+
+Antes de instalar, salve as modificacoes locais no VS Code.

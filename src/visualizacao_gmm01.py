@@ -536,3 +536,8 @@ def gerar(config, data, destino, ext, dpi, csv):
             ext,
             dpi
         )
+    # PCA3D_GMM01_EXTRAS_OFICIAIS_V1
+    # A extensao e executada somente apos as marginais PCA 3D.
+    if d == 3:
+        from src.visualizacao_gmm01_3d import gerar_complementares
+        gerar_complementares(config, data, destino, ext, dpi, csv)

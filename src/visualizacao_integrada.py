@@ -31,7 +31,7 @@ from src import visualizacao_geometrica as geo
 from src import visualizacao_oof as oof
 from src import estrutura_saida as layout
 
-FORMATS = ('.png', '.pdf', '.svg')
+FORMATS = ('.png', '.pdf', '.svg', '.html')
 NOMES_GEO = dict(geo.NUM)
 GEO_PREFIXOS = {
     'densidades_marginais': 'GMM01_densidade_marginal_',
@@ -296,6 +296,56 @@ def _verificar_geracoes(experimento,config,escolha,*,executar):
                 for nome in adicionais_2d
             )
 
+        # PCA3D_GMM01_GALERIA_V1: verificar os cinco anexos GMM01.
+        if (escolha['configuracao']['metodo'].upper() == 'PCA'
+                and int(escolha['configuracao']['reducao']['n_components']) == 3
+                and 'densidades_marginais' in esperado_geo):
+            anexos_gmm01_3d = (
+                'GMM01_conjunta_corte_PC1_PC2.png',
+                'GMM01_conjunta_corte_PC1_PC3.png',
+                'GMM01_conjunta_corte_PC2_PC3.png',
+                'GMM01_geometria_gaussianas_FULL_3d_95.png',
+                'GMM01_densidade_conjunta_PCA3D_INTERATIVA.html',
+            )
+            imagens_geo = imagens_geo and all(
+                (geo_dir / nome).is_file() for nome in anexos_gmm01_3d
+            )
+
+        # PCA3D_BIPLOT_GALERIA_V1: exigir HTML e coeficientes quando PCA3D.
+        if (escolha['configuracao']['metodo'].upper() == 'PCA'
+                and int(escolha['configuracao']['reducao']['n_components']) == 3
+                and 'pca_biplot' in esperado_geo):
+            imagens_geo = imagens_geo and all(
+                (geo_dir / nome).is_file() for nome in (
+                    f'PCA_COEFICIENTES_PC1_PC2_PC3{ext}',
+                    'PCA_BIPLOT_3D_INTERATIVO.html',
+                )
+            )
+
+        # PCA3D_GMM04_GALERIA_V1: exigir HTML apenas no PCA 3D.
+        if (escolha['configuracao']['metodo'].upper() == 'PCA'
+                and int(escolha['configuracao']['reducao']['n_components']) == 3
+                and 'regioes_dominancia' in esperado_geo):
+            imagens_geo = imagens_geo and (
+                geo_dir / 'GMM04_dominancia_3d_INTERATIVA.html'
+            ).is_file()
+
+        # PCA3D_GMM07_V2_GALERIA: HTML obrigatorio so para PCA3D com GMM07 ativo.
+        if (escolha['configuracao']['metodo'].upper() == 'PCA'
+                and int(escolha['configuracao']['reducao']['n_components']) == 3
+                and 'sensibilidade_fronteira' in esperado_geo):
+            imagens_geo = imagens_geo and (
+                geo_dir / 'GMM07_sensibilidade_3d_comparativo_INTERATIVA.html'
+            ).is_file()
+
+        # PCA3D_GMM08_GALERIA: HTML obrigatorio somente para GMM08 PCA3D habilitado.
+        if (escolha['configuracao']['metodo'].upper() == 'PCA'
+                and int(escolha['configuracao']['reducao']['n_components']) == 3
+                and 'mapa_risco_fronteira' in esperado_geo):
+            imagens_geo = imagens_geo and (
+                geo_dir / 'GMM08_mapa_risco_3d_comparativo_INTERATIVA.html'
+            ).is_file()
+
         return imagens_oof, imagens_geo
 
     tem_oof,tem_geo=completos()
@@ -387,7 +437,7 @@ def _html_galeria(experimento,arquivos,escolha,complemento,metodo,tipo):
             ref=html.escape(caminho.as_posix(),quote=True)
             nome=html.escape(rotulo)
             previa=(f'<img src="{ref}" loading="lazy" alt="{nome}">' if
-                    caminho.suffix.lower() in ('.png','.svg') else '<div class="sem-previa">Visualização em PDF — clique para abrir</div>')
+                    caminho.suffix.lower() in ('.png','.svg') else ('<div class="sem-previa">Visualização 3D interativa — clique para abrir</div>' if caminho.suffix.lower()=='.html' else '<div class="sem-previa">Visualização em PDF — clique para abrir</div>'))
             partes.append(f'<article><a href="{ref}" target="_blank" rel="noopener">{previa}<div>{nome}</div></a></article>')
         partes.append('</div></section>')
         blocos.extend(partes)
@@ -530,6 +580,72 @@ def integrar(experimento, *, planejar=False, complementar_2d=True):
 
 
 
+                # PCA3D_GMM01_GALERIA_V1: arquivos extras da dimensao 3.
+                if ('densidades_marginais' in ativos_geo
+                        and escolha['configuracao']['metodo'].upper() == 'PCA'
+                        and int(escolha['configuracao']['reducao']['n_components']) == 3
+                        and arq.name in {
+                            'GMM01_conjunta_corte_PC1_PC2.png',
+                            'GMM01_conjunta_corte_PC1_PC3.png',
+                            'GMM01_conjunta_corte_PC2_PC3.png',
+                            'GMM01_geometria_gaussianas_FULL_3d_95.png',
+                            'GMM01_densidade_conjunta_PCA3D_INTERATIVA.html',
+                        }):
+                    permitido = True
+
+                # PCA3D_BIPLOT_GALERIA_V1: somente dois arquivos oficiais.
+                if ('pca_biplot' in ativos_geo
+                        and escolha['configuracao']['metodo'].upper() == 'PCA'
+                        and int(escolha['configuracao']['reducao']['n_components']) == 3
+                        and arq.name in {
+                            'PCA_COEFICIENTES_PC1_PC2_PC3' +
+                            '.' + config['visualizacao']['padrao'].get('formato', 'png').lower(),
+                            'PCA_BIPLOT_3D_INTERATIVO.html',
+                        }):
+                    permitido = True
+
+                # PCA3D_GMM04_GALERIA_V1: HTML de dominancia do vencedor PCA3D.
+                if ('regioes_dominancia' in ativos_geo
+                        and escolha['configuracao']['metodo'].upper() == 'PCA'
+                        and int(escolha['configuracao']['reducao']['n_components']) == 3
+                        and arq.name == 'GMM04_dominancia_3d_INTERATIVA.html'):
+                    permitido = True
+
+                # PCA3D_GMM07_V2_GALERIA: incorporar apenas o HTML do vencedor PCA3D.
+                if ('sensibilidade_fronteira' in ativos_geo
+                        and escolha['configuracao']['metodo'].upper() == 'PCA'
+                        and int(escolha['configuracao']['reducao']['n_components']) == 3
+                        and arq.name == 'GMM07_sensibilidade_3d_comparativo_INTERATIVA.html'):
+                    permitido = True
+
+                # PCA3D_GMM08_GALERIA: somente HTML esperado do vencedor PCA3D.
+                if ('mapa_risco_fronteira' in ativos_geo
+                        and escolha['configuracao']['metodo'].upper() == 'PCA'
+                        and int(escolha['configuracao']['reducao']['n_components']) == 3
+                        and arq.name == 'GMM08_mapa_risco_3d_comparativo_INTERATIVA.html'):
+                    permitido = True
+
+                # GMM01_GEOMETRIA_HTML_3D_V1: geometria 3D interativa do vencedor.
+                if ('densidades_marginais' in ativos_geo
+                        and escolha['configuracao']['metodo'].upper() == 'PCA'
+                        and int(escolha['configuracao']['reducao']['n_components']) == 3
+                        and arq.name == 'GMM01_geometria_gaussianas_FULL_3d_95_INTERATIVA.html'):
+                    permitido = True
+                # Mostrar o HTML em vez do PNG estatico na galeria.
+                if ('densidades_marginais' in ativos_geo
+                        and escolha['configuracao']['metodo'].upper() == 'PCA'
+                        and int(escolha['configuracao']['reducao']['n_components']) == 3
+                        and arq.name == 'GMM01_geometria_gaussianas_FULL_3d_95.png'):
+                    permitido = False
+
+            # PCA3D_ESFERA_CORRELACOES_GALERIA_V1
+            if ('pca_biplot' in ativos_geo
+                    and escolha['configuracao']['metodo'].upper() == 'PCA'
+                    and int(escolha['configuracao']['reducao']['n_components']) == 3
+                    and secao == 'geometria_desenvolvimento'
+                    and arq.name == 'PCA_ESFERA_CORRELACOES_3D_INTERATIVA.html'):
+                permitido = True
+            
             if permitido:
                 relativo=Path(secao)/arq.name
                 _arquivo_seguro_copiar(arq,base/relativo)

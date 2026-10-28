@@ -546,7 +546,7 @@ def _fig_3d(z, y, idx, config, selecionadas, variancia):
                 f'V{i}', fontsize=8)
         av.quiver(0, 0, 0, u, v, w, color='#274d83', lw=1.5,
                   arrow_length_ratio=.10)
-        av.text(u * 1.1, v * 1.1, w * 1.1, str(r['variavel_preprocessada']), fontsize=7)
+        av.text(u * 1.1, v * 1.1, w * 1.1, f'V{i}', fontsize=8)
     u = np.linspace(0, 2*np.pi, 35)
     v = np.linspace(0, np.pi, 18)
     av.plot_wireframe(np.outer(np.cos(u), np.sin(v)), np.outer(np.sin(u), np.sin(v)),
@@ -561,10 +561,9 @@ def _fig_3d(z, y, idx, config, selecionadas, variancia):
              ','.join(f'{r[f"corr_PC{k}"]:+.2f}' for k in (1,2,3))
              for i, (_, r) in enumerate(selecionadas.iterrows(), start=1)]
     tabela = '\n'.join('   |   '.join(itens[j:j+3]) for j in range(0, len(itens), 3))
-    fig.text(.50,.025,'Correlacoes (PC1, PC2, PC3): ' + tabela,
-             ha='center', va='bottom', fontsize=7, wrap=True)
+    # PCA3D_BIPLOT_PNG_SEM_RODAPE_V1: tabela no HTML interativo.
     fig.suptitle('Biplot PCA 3D — desenvolvimento F1–F9', fontweight='bold')
-    fig.tight_layout(rect=[0,.07,1,.95]); return fig
+    fig.tight_layout(rect=[0,.02,1,.95]); return fig
 
 
 def _mapa_cores_variaveis_pca(variaveis):
@@ -1129,6 +1128,16 @@ def gerar(config, data, destino, ext, dpi, csv):
         coords['classe_real'] = y[idx]
         coords.insert(0, 'indice_linha_desenvolvimento', np.asarray(coord.index)[idx])
         vis._csv_protegido(coords, Path(destino) / f'{base}_scores_amostra.csv')
+    # PCA3D_BIPLOT_COEFICIENTES_OFICIAIS_V1
+    # Reutiliza dados, indices e PCA ja ajustados; PCA 1D/2D ficam intactos.
+    if dim == 3:
+        from src.visualizacao_pca3d_complementos import gerar_complementares
+        gerar_complementares(
+            config, data, destino, ext, dpi, csv,
+            idx=idx, tabela_correlacoes=tab,
+            mapa_cores=_mapa_cores_variaveis_pca(x.columns),
+        )
+
     return {'arquivo': f'{base}.{ext}', 'dimensoes': dim, 'n_obs_total': len(z),
             'n_obs_amostra': len(idx), 'n_variaveis': x.shape[1],
             'n_setas': len(selecao), 'origem': 'desenvolvimento_F1_F9', 'f10_utilizado': False}

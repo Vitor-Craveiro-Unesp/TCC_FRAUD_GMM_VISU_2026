@@ -279,6 +279,21 @@ def gerar(config, data, destino, ext, dpi, csv):
                     alpha=.55
                 )
 
+        # GMM04_PCA3D_CORTES_GAUSSIANOS_95_V1
+        # Intersecao verdadeira do elipsoide FULL 95% com cada plano.
+        if d == 3:
+            from matplotlib.patches import Ellipse
+            for g in range(k):
+                secao = geo._elipse_95_corte(gm, g, (i, j), centro_desenvolvimento)
+                if secao is None:
+                    continue  # O plano nao intersecta o elipsoide de 95%.
+                centro_el, largura_el, altura_el, angulo_el = secao
+                ax.add_patch(Ellipse(
+                    xy=centro_el, width=largura_el, height=altura_el,
+                    angle=angulo_el, fill=False, linestyle='--',
+                    linewidth=1.65, edgecolor=cores[g], zorder=4,
+                ))
+
         # Fronteiras entre gaussianas dominantes.
         if z.min()!=z.max():
             ax.contour(
@@ -374,7 +389,7 @@ def gerar(config, data, destino, ext, dpi, csv):
     else:
         # Preserva a apresentacao original do PCA 3D.
         fig.suptitle(
-            f'GMM 04 — Regiões de dominância | '
+            f'REGIÕES DE DOMINÂNCIA DAS GAUSSIANAS | '
             f'{d}D | {p.covariance_type.upper()}',
             fontsize=15.5,
             fontweight='bold',
@@ -382,9 +397,9 @@ def gerar(config, data, destino, ext, dpi, csv):
         )
 
         fig.legend(
-            handles=_legenda(
+            handles=(_legenda(
                 nomes, cores, pontos=bool(len(idx))
-            ),
+            ) + [Line2D([], [], color='#495c74', ls='--', lw=1.65, label='Seções gaussianas FULL 95%')]),
             loc='upper center',
             bbox_to_anchor=(.5, .917),
             ncol=min(k+2, 6),
@@ -401,13 +416,7 @@ def gerar(config, data, destino, ext, dpi, csv):
     
     # RODAPE_RESTAURADO_PCA2D_GMM04
     if d == 2:
-        fig.text(
-            .5, .045,
-            'Regiões coloridas: gaussiana dominante  |  '
-            'Curvas tracejadas: isodensidades gaussianas 50% / 95%  |  '
-            '×: médias gaussianas',
-            ha='center', fontsize=9.3, color='#46556e'
-        )
+        pass  # anotacao visual removida
 
     fig.subplots_adjust(
         left=.065 if d==3 else .1,
@@ -418,3 +427,9 @@ def gerar(config, data, destino, ext, dpi, csv):
     )
     
     geo._guardar(fig,destino,f'GMM04_dominancia_{d}d',ext,dpi)
+
+    # PCA3D_GMM04_INTERATIVO_OFICIAL_V1
+    # GMM ja ajustado: apenas visualizacao; 1D e 2D ficam intactos.
+    if d == 3:
+        from src.visualizacao_gmm04_3d import gerar_interativo
+        gerar_interativo(config, data, destino, salvar_csv=csv)

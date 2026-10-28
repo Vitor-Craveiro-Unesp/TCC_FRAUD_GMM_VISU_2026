@@ -1,0 +1,32 @@
+INTEGRACAO GMM07 V2 - PCA 3D
+====================================
+
+Coloque os tres .py na RAIZ do TCC_EXPERIMENTAL_V3, ao lado do YAML:
+ - instalar_gmm07_pca3d.py
+ - visualizacao_gmm07_3d.py
+ - validar_integracao_gmm07_pca3d.py
+
+No PowerShell dessa raiz:
+
+$OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+.\.venv\Scripts\python.exe .\instalar_gmm07_pca3d.py
+if ($LASTEXITCODE -ne 0) { throw "Instalacao interrompida" }
+.\.venv\Scripts\python.exe .\validar_integracao_gmm07_pca3d.py
+if ($LASTEXITCODE -ne 0) { throw "Validacao interrompida" }
+
+O instalador:
+ - adiciona src/visualizacao_gmm07_3d.py
+ - modifica somente a rota PCA 3D de src/visualizacao_gmm07.py
+ - adiciona o HTML GMM07 a completude e lista branca da galeria
+ - cria backups .bak dos dois arquivos modificados
+ - valida sintaxe antes de salvar e reverte se ocorrer falha na escrita
+ - NAO modifica YAML, modelos, base, outputs existentes nem F10
+
+O validador usa dados sinteticos e gera outputs/validacao_integracao_gmm07_v2_pca3d_...
+com subpastas PCA_1D, PCA_2D e PCA_3D. Produz PNG em todos e HTML offline
+somente em PCA_3D. Nao executa OOF completo.
+
+Requisitos: plotly instalado no .venv (ja instalado nas auditorias 3D).
+
+ATENCAO: execute uma unica vez. Se o instalador reportar estrutura diferente,
+NAO force a instalacao; preserve os backups e envie o erro.

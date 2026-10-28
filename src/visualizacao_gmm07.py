@@ -213,46 +213,7 @@ def _grafico(config, data, escolha, planos, medias_fixas, *, destino, ext, dpi,
                     )
 
                 # Elipses FULL de concentracao 95% somente no PCA 2D.
-                if dimensoes == 2:
-                    from scipy.stats import chi2
-
-                    raio_95 = float(
-                        np.sqrt(chi2.ppf(.95, df=2))
-                    )
-
-                    gm = data['gmm']
-
-                    for k in range(len(gm.saidas_)):
-                        cov = np.asarray(
-                            geo._covariancia(gm, k)[:2, :2],
-                            dtype=float
-                        )
-
-                        eig, V = np.linalg.eigh(cov)
-
-                        geo._exigir(
-                            np.isfinite(eig).all() and np.all(eig > 0),
-                            'Covariancia invalida nas elipses GMM07.'
-                        )
-
-                        angulo = np.degrees(
-                            np.arctan2(V[1, 1], V[0, 1])
-                        )
-
-                        ax.add_patch(
-                            Ellipse(
-                                xy=gm.modelo_.means_[k, :2],
-                                width=2 * raio_95 * np.sqrt(eig[1]),
-                                height=2 * raio_95 * np.sqrt(eig[0]),
-                                angle=angulo,
-                                fill=False,
-                                linestyle=(0, (5, 3)),
-                                linewidth=1.7,
-                                edgecolor=plt.get_cmap('tab10')(k % 10),
-                                alpha=.95,
-                                zorder=6
-                            )
-                        )
+                pass  # GMM07 2D: elipses e legenda removidas; fronteiras mantidas
 
                 ax.set(
                     xlim=(xx[0, 0], xx[0, -1]),
@@ -370,16 +331,7 @@ def _grafico(config, data, escolha, planos, medias_fixas, *, destino, ext, dpi,
     else:
         legenda.pop(2)
 
-    if dimensoes == 2:
-        legenda.append(
-            Line2D(
-                [0], [0],
-                color='#7b4fa8',
-                lw=1.7,
-                ls=(0, (5, 3)),
-                label='Elipses gaussianas 95%'
-            )
-        )
+    pass  # GMM07 2D: elipses e legenda removidas; fronteiras mantidas
 
 
     fig.legend(
@@ -438,8 +390,14 @@ def gerar(config, data, escolha, destino, ext, dpi, csv, *, avaliacao):
         margem=float(op.get('margem',.15)))
     destino=Path(destino)
     destino.mkdir(parents=True,exist_ok=True)
-    nome = _grafico(config,data,escolha,planos,medias,destino=destino,ext=ext,dpi=dpi,
-                    mcc_fixo=mcc_fixo,mcc_otimo=mcc_otimo,avaliacao=avaliacao)
+    # PCA3D_GMM07_V2_OFICIAL: somente o 3D usa o PNG V2 + HTML rotativo.
+    if data['coord'].shape[1] == 3:
+        from src.visualizacao_gmm07_3d import gerar_3d
+        nome = gerar_3d(config, data, escolha, planos, medias, destino,
+                        ext, dpi, avaliacao, mcc_fixo, mcc_otimo)
+    else:
+        nome = _grafico(config,data,escolha,planos,medias,destino=destino,ext=ext,dpi=dpi,
+                        mcc_fixo=mcc_fixo,mcc_otimo=mcc_otimo,avaliacao=avaliacao)
     if csv:
         cols=list(data['coord'].columns)
         for par,grade,campo,fixo,otimo,mudou in planos:

@@ -1,0 +1,19 @@
+AJUSTES PCA 3D - GMM04 E BIPLOT / ESFERA
+
+1. Copie ajustar_gmm04_biplot_esfera_3d.py para a raiz de TCC_EXPERIMENTAL_V3.
+2. Execute:
+   .\.venv\Scripts\python.exe .\ajustar_gmm04_biplot_esfera_3d.py --verificar
+   .\.venv\Scripts\python.exe .\ajustar_gmm04_biplot_esfera_3d.py --aplicar
+3. Valide sem OOF:
+   .\.venv\Scripts\python.exe .\validar_integracao_gmm04_pca3d.py
+   .\.venv\Scripts\python.exe .\validar_integracao_biplot_pca3d.py
+
+Alteracoes:
+- GMM04 PNG PCA3D: titulo sem 'GMM 04'; cortes gaussianos FULL 95% em tracejado por plano, quando matematicamente existentes.
+- Biplot PNG PCA3D: remove rodape extenso e usa V1...V6 nos vetores da esfera.
+- Novo HTML: PCA_ESFERA_CORRELACOES_3D_INTERATIVA.html, esfera real e controles 6 / todos os vetores.
+- Integrador da galeria permite o HTML novo apenas em PCA 3D.
+- GMM04 HTML existente ja mostra elipsoides FULL 95%.
+
+Os PNGs e HTMLs de galerias antigas NAO sao substituidos por esse instalador.
+Backups automaticos. Nao utiliza F10, nao modifica YAML, nao treina.
