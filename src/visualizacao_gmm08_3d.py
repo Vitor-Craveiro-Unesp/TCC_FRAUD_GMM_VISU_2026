@@ -443,3 +443,7 @@ def gerar_3d(config, data, escolha, destino, ext, dpi, csv, *, avaliacao):
     assert caminho.is_file() and pagina.is_file()
     print('[GERADO]',caminho.name)
     print('[GERADO]',pagina.name)
+
+
+
+

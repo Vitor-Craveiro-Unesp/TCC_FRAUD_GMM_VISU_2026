@@ -1,3 +1,4 @@
+# K4_DINAMICO_VALIDADO_20261028
 # GMM01_GEOMETRIA_HTML_3D_V1
 # GMM01_LAYOUT_LIMPO_V1
 # -*- coding: utf-8 -*-
@@ -6,7 +7,7 @@
 Usa exclusivamente GMM ajustado no desenvolvimento F1-F9 recebido de
 src.visualizacao_gmm01.gerar. Nao ajusta modelos nem acessa F10.
 
-Gera, para PCA 3D / GMM FULL / K=3:
+Gera, para PCA 3D / GMM FULL / K dinamico:
 - 3 imagens de cortes: cada imagem tem 3 planos, fixando a coordenada
   omitida na media de cada gaussiana (cada painel mostra a mistura inteira);
 - 1 PNG com 3 elipsoides FULL 95%;
@@ -25,7 +26,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-COLORS = ('#1685bb', '#f0842d', '#25a277')
+COLORS = ('#1685bb', '#f0842d', '#25a277', '#c22c70', '#735bd0', '#8c564b')
 PARES = ((0,1,2),(0,2,1),(1,2,0))
 NOMES = ('PC1','PC2','PC3')
 
@@ -40,8 +41,9 @@ def _validar(data):
     cov=np.asarray(model.covariances_,dtype=float)
     weights=np.asarray(model.weights_,dtype=float)
     # K3 e o experimento de auditoria aprovado; outros K exigem novo layout.
-    if mu.shape!=(3,3) or cov.shape!=(3,3,3) or weights.shape!=(3,):
-        raise ValueError('GMM01 3D: este layout validado requer K=3 e PCA 3D.')
+    if (mu.ndim != 2 or mu.shape[1] != 3 or len(mu) < 1 or
+            cov.shape != (len(mu), 3, 3) or weights.shape != (len(mu),)):
+        raise ValueError('GMM01 3D: requer K positivo e PCA 3D.')
     xyz=np.asarray(coord,dtype=float)
     if xyz.ndim!=2 or xyz.shape[1]!=3 or not np.isfinite(xyz).all():
         raise ValueError('GMM01 3D: coordenadas PCA invalidas.')
@@ -70,7 +72,7 @@ def _densidade_componentes(pts,mu,cov,weights):
     arr=np.column_stack([
         weights[k]*multivariate_normal.pdf(
             pts,mean=mu[k],cov=cov[k],allow_singular=False)
-        for k in range(3)
+        for k in range(len(mu))
     ])
     if not np.isfinite(arr).all() or (arr<0).any():
         raise ValueError('GMM01 3D: densidade invalida.')
@@ -78,14 +80,14 @@ def _densidade_componentes(pts,mu,cov,weights):
 
 
 def _planos(xyz,mu,cov,weights,n=125):
-    """Nove seções da MESMA densidade conjunta: 3 pares x 3 alturas."""
+    """Secoes da MESMA densidade conjunta: 3 pares x K alturas."""
     ranges=_faixas(xyz,mu,cov)
     nivel95=float(chi2.ppf(.95,df=3))
     results=[]
     inv_cov=np.linalg.inv(cov)
     for a,b,om in PARES:
         gx,gy=np.meshgrid(np.linspace(*ranges[a],n),np.linspace(*ranges[b],n))
-        for h in range(3):
+        for h in range(len(mu)):
             fixed=float(mu[h,om])
             pts=np.empty((n*n,3),dtype=float)
             pts[:,a]=gx.ravel()
@@ -94,7 +96,7 @@ def _planos(xyz,mu,cov,weights,n=125):
             comp=_densidade_componentes(pts,mu,cov,weights)
             f=comp.sum(axis=1).reshape(gx.shape)
             distances=[]
-            for k in range(3):
+            for k in range(len(mu)):
                 d=pts-mu[k]
                 distances.append(np.einsum('ni,ij,nj->n',d,inv_cov[k],d).reshape(gx.shape))
             results.append((a,b,om,h,fixed,gx,gy,pts,comp,f,distances,nivel95))
@@ -110,7 +112,7 @@ def _cortes(xyz,mu,cov,weights,dest,dpi=165,csv=True):
     for par in PARES:
         a,b,om=par
         sel=[m for m in mapas if m[:3]==par]
-        fig,axs=plt.subplots(1,3,figsize=(19.5,6.4),sharex=True,sharey=True)
+        fig,axs=plt.subplots(1,len(mu),figsize=(6.5*len(mu),6.4),sharex=True,sharey=True)
         fig.suptitle('CORTES DA DENSIDADE CONJUNTA GAUSSIANA',
                      fontweight='bold',fontsize=17,y=.965)
         im=None
@@ -129,7 +131,7 @@ def _cortes(xyz,mu,cov,weights,dest,dpi=165,csv=True):
             if csv:
                 tab=pd.DataFrame(pts,columns=NOMES)
                 tab['densidade_conjunta']=f.ravel()
-                for k in range(3):
+                for k in range(len(mu)):
                     tab[f'contribuicao_G{k+1}']=comp[:,k]
                     tab[f'dentro_elipsoide_95_G{k+1}']=(distances[k].ravel()<=level)
                 tab.to_csv(dest/f'GMM01_conjunta_corte_{NOMES[a]}_{NOMES[b]}_plano_G{h+1}.csv',
@@ -138,8 +140,8 @@ def _cortes(xyz,mu,cov,weights,dest,dpi=165,csv=True):
         cb=fig.colorbar(im,cax=cax,format='%.7f')
         cb.set_label('Densidade conjunta f(PC1,PC2,PC3)')
         handles=[Line2D([0],[0],color=COLORS[k],lw=1.7,ls='--',
-                        label=f'G{k+1} — seção FULL 95%') for k in range(3)]
-        fig.legend(handles=handles,ncol=3,loc='lower center',
+                        label=f'G{k+1} — seção FULL 95%') for k in range(len(mu))]
+        fig.legend(handles=handles,ncol=min(4,len(mu)),loc='lower center',
                    bbox_to_anchor=(.48,.070),frameon=False,fontsize=9)
         fig.subplots_adjust(left=.065,right=.895,bottom=.200,top=.865,wspace=.13)
         file=dest/f'GMM01_conjunta_corte_{NOMES[a]}_{NOMES[b]}.png'
@@ -168,7 +170,7 @@ def _geometria_png(xyz,mu,cov,dest,dpi=165):
     idx=np.linspace(0,len(xyz)-1,min(len(xyz),2800),dtype=int)
     ax.scatter(xyz[idx,0],xyz[idx,1],xyz[idx,2],s=5,color='#456987',
                alpha=.095,depthshade=False,label='Observações projetadas')
-    for k in range(3):
+    for k in range(len(mu)):
         x,y,z=_elipsoide(mu[k],cov[k])
         ax.plot_wireframe(x,y,z,color=COLORS[k],linewidth=.60,alpha=.47,rstride=2,cstride=2)
         ax.scatter([mu[k,0]],[mu[k,1]],[mu[k,2]],color=COLORS[k],marker='X',
@@ -178,7 +180,7 @@ def _geometria_png(xyz,mu,cov,dest,dpi=165):
     ax.legend(loc='upper left',frameon=True,fontsize=9)
     fig.suptitle('GEOMETRIA DA MISTURA GAUSSIANA — PCA 3D',
                  fontsize=15,fontweight='bold',y=.965)
-    fig.text(.5,.915,'FULL | K=3 | elipsoides de concentração gaussiana de 95%',
+    fig.text(.5,.915,f'FULL | K={len(mu)} | elipsoides de concentração gaussiana de 95%',
              ha='center',fontsize=11,color='#4c617c')
     fig.subplots_adjust(left=.06,right=.87,top=.86,bottom=.15)
     file=dest/'GMM01_geometria_gaussianas_FULL_3d_95.png'
@@ -195,7 +197,7 @@ def _malha_3d(xyz,mu,cov,weights,n=29):
     components=_densidade_componentes(pts,mu,cov,weights)
     tab=pd.DataFrame(pts,columns=NOMES)
     tab['densidade_conjunta']=components.sum(axis=1)
-    for k in range(3):tab[f'contribuicao_G{k+1}']=components[:,k]
+    for k in range(len(mu)):tab[f'contribuicao_G{k+1}']=components[:,k]
     return tab
 
 
@@ -211,7 +213,7 @@ def _interativo_html(mu,cov,weights,malha,dest):
         colorscale='Viridis',caps={'x_show':False,'y_show':False,'z_show':False},
         showscale=True,colorbar={'title':{'text':'Densidade','side':'top'},'x':1.02,'y':.5,'len':.69,'thickness':16,'tickformat':'.3f'},name='Isossuperfícies da mistura',
     ))
-    for k in range(3):
+    for k in range(len(mu)):
         x,y,z=_elipsoide(mu[k],cov[k])
         fig.add_trace(go.Surface(x=x,y=y,z=z,surfacecolor=np.full_like(x,k,dtype=float),
             colorscale=[[0,COLORS[k]],[1,COLORS[k]]],showscale=False,opacity=.23,
@@ -220,9 +222,9 @@ def _interativo_html(mu,cov,weights,malha,dest):
             mode='markers+text',text=[f'G{k+1}'],textposition='top center',
             marker={'size':6,'color':COLORS[k],'symbol':'diamond'},
             name=f'Centro G{k+1}',hovertemplate=(f'G{k+1} | peso = {weights[k]:.7f}<extra></extra>')))
-    v_iso=[True]+[False,True]*3
-    v_ell=[False]+[True,True]*3
-    v_all=[True]+[True,True]*3
+    v_iso=[True]+[False,True]*len(mu)
+    v_ell=[False]+[True,True]*len(mu)
+    v_all=[True]+[True,True]*len(mu)
     fig.update_layout(
         height=730,margin={'l':10,'r':110,'t':95,'b':15},showlegend=False,
         scene={'xaxis':{'title':'PC1'},'yaxis':{'title':'PC2'},'zaxis':{'title':'PC3'},
@@ -244,7 +246,7 @@ def _interativo_html(mu,cov,weights,malha,dest):
 </head><body><main><div class="header"><div><h1>Densidade Conjunta PCA 3D</h1><p>Covariância FULL | K=3 | PCA 3D</p></div><div><button id="spin">▶ Girar automaticamente</button> <button id="reset">↺ Restaurar</button></div></div><div class="panel">__CHART__</div>
 <p>Isossuperfícies: densidade conjunta da mistura. Elipsoides: concentração FULL 95% de cada gaussiana. Não representam risco de fraude.</p></main><script>(()=>{const gd=document.getElementById('gmm01_3d');const spin=document.getElementById('spin');let timer=null,a=.7;function stop(){if(timer!==null){clearInterval(timer);timer=null;}spin.textContent='▶ Girar automaticamente';}spin.onclick=()=>{if(timer!==null){stop();return;}spin.textContent='⏸ Pausar';timer=setInterval(()=>{a+=.025;Plotly.relayout(gd,{'scene.camera.eye':{x:2.1*Math.cos(a),y:2.1*Math.sin(a),z:.9}})},75)};document.getElementById('reset').onclick=()=>{stop();a=.7;Plotly.relayout(gd,{'scene.camera.eye':{x:1.8,y:1.6,z:.95}})};gd.addEventListener('pointerdown',stop);window.addEventListener('pagehide',stop)})();</script></body></html>'''
     file=dest/'GMM01_densidade_conjunta_PCA3D_INTERATIVA.html'
-    file.write_text(html.replace('__CHART__',chart),encoding='utf-8')
+    file.write_text(html.replace('__CHART__',chart).replace('K=3',f'K={len(mu)}'),encoding='utf-8')
     return file
 
 
@@ -278,7 +280,7 @@ def _geometria_interativa_html(xyz, mu, cov, weights, dest):
         hovertemplate='PC1=%{x:.7f}<br>PC2=%{y:.7f}<br>PC3=%{z:.7f}<extra></extra>',
     ))
 
-    for k in range(3):
+    for k in range(len(mu)):
         x, y, z = _elipsoide(mu[k], cov[k], nu=49, nv=31)
         px, py, pz = [], [], []
 
@@ -358,9 +360,7 @@ button:hover{background:#ebf3fc}.plot{background:white;border-radius:12px;box-sh
 const plot=document.getElementById('gmm01_geometria_3d');
 const girar=document.getElementById('girar');let relogio=null,angulo=.79;
 function parar(){if(relogio!==null){clearInterval(relogio);relogio=null;}girar.textContent='▶ Girar automaticamente';}
-function visiveis(tipo){parar();const v=tipo==='todos'?[true,true,true,true,true,true,true]:
-(tipo==='gaussianas'?[false,true,true,true,true,true,true]:[true,false,false,false,false,false,false]);
-Plotly.restyle(plot,{visible:v});}
+function visiveis(tipo){parar();const n=plot.data.length;const v=Array.from({length:n},(_,i)=>tipo==='todos'?true:(tipo==='gaussianas'?i>0:i===0));Plotly.restyle(plot,{visible:v});}
 document.getElementById('todos').onclick=()=>visiveis('todos');
 document.getElementById('gaussianas').onclick=()=>visiveis('gaussianas');
 document.getElementById('observacoes').onclick=()=>visiveis('observacoes');
@@ -371,7 +371,7 @@ document.getElementById('restaurar').onclick=()=>{parar();angulo=.79;Plotly.rela
 plot.addEventListener('pointerdown',parar);window.addEventListener('pagehide',parar);
 })();</script></body></html>"""
     arquivo = destino / 'GMM01_geometria_gaussianas_FULL_3d_95_INTERATIVA.html'
-    arquivo.write_text(pagina.replace('__GRAFICO__', grafico), encoding='utf-8')
+    arquivo.write_text(pagina.replace('__GRAFICO__', grafico).replace('K=3',f'K={len(mu)}'), encoding='utf-8')
     return arquivo
 
 def gerar_complementares(config,data,destino,ext,dpi,csv):

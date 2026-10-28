@@ -137,7 +137,7 @@ reducao:
 pca:
   # Inteiro positivo <= quantidade de features apos encoding.
   # Ex.: 2 ou [2, 4, 8, 16]. "mle" requer condicoes especificas.
-  n_components: [1]
+  n_components: [2]
 
   # Opcional: manter variancias ou branquear componentes.
   # Ex.: false ou [false, true].
@@ -193,7 +193,7 @@ tsne:
 # ============================================================
 gmm:
   # 1 = uma gaussiana; 2 = duas; [1, 2, 4, 8] = grade de K.
-  n_components: [2,4,6]
+  n_components: [3]
 
   # Opcoes: "full", "diag", "tied", "spherical".
   # "diag" geralmente economiza memoria/tempo em base grande.

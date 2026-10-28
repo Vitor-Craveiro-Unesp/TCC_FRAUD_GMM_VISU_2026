@@ -1503,7 +1503,7 @@ def _plot_metricas_por_fold(experimento, config, y, p, escolha, destino, ext, dp
         lambda v, _: f'{0.0 if abs(v) < 0.00000005 else v:.7f}'
     )
     fig, eixos = plt.subplots(3, 1, figsize=(12.5, 11.5), facecolor='white')
-    fig.subplots_adjust(left=.13, right=.965, top=.88, bottom=.075, hspace=.49)
+    fig.subplots_adjust(left=.13, right=.76, top=.88, bottom=.075, hspace=.49)
 
     fig.suptitle('ESTABILIDADE DAS MÉTRICAS POR FOLD OOF',
                  fontsize=16, fontweight='bold', y=.980, color='#20324a')
@@ -1525,7 +1525,7 @@ def _plot_metricas_por_fold(experimento, config, y, p, escolha, destino, ext, dp
     ax.set_title('A — Average Precision (AP)', loc='left',
                  fontsize=12, fontweight='bold', pad=10)
     ax.set_ylabel('AP / prevalência')
-    ax.legend(frameon=False, fontsize=9, loc='upper right')
+    ax.legend(frameon=False, fontsize=9, loc='upper left', bbox_to_anchor=(1.02, 1.0), borderaxespad=0)
 
     ax = eixos[1]
     ax.plot(x, tabela['mcc_corte_050'], '-o', color='#d08040',
@@ -1536,7 +1536,7 @@ def _plot_metricas_por_fold(experimento, config, y, p, escolha, destino, ext, dp
     ax.set_title('B — Matthews Correlation Coefficient (MCC)',
                  loc='left', fontsize=12, fontweight='bold', pad=10)
     ax.set_ylabel('MCC bruto')
-    ax.legend(frameon=False, fontsize=9, loc='upper right')
+    ax.legend(frameon=False, fontsize=9, loc='upper left', bbox_to_anchor=(1.02, 1.0), borderaxespad=0)
 
     ax = eixos[2]
     ax.plot(x, tabela['exp_menos_logloss'], '-o', color='#7656a5',
@@ -1544,7 +1544,7 @@ def _plot_metricas_por_fold(experimento, config, y, p, escolha, destino, ext, dp
     ax.set_title('C — exp(-LogLoss)', loc='left',
                  fontsize=12, fontweight='bold', pad=10)
     ax.set_ylabel('exp(-LogLoss)')
-    ax.legend(frameon=False, fontsize=9, loc='upper right')
+    ax.legend(frameon=False, fontsize=9, loc='upper left', bbox_to_anchor=(1.02, 1.0), borderaxespad=0)
 
     for ax in eixos:
         ax.set_xlim(.7, 9.3)

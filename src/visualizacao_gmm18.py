@@ -48,21 +48,21 @@ def gerar(config, data, destino, ext, dpi, csv):
 
     fig, ax = plt.subplots(figsize=(12.5, 7.2), facecolor='white')
     fig.subplots_adjust(left=.135, right=.96, top=.78, bottom=.175)
-    cores = ['#96a7bb', '#d19b69', '#7599ac', '#b9a1bf', '#a6ad8f']
+    cores = ['#B12A90', '#D55E00', '#0057B8', '#009E73', '#7F3C8D']
     for h in historicos:
         indice = int(h['init'])
         valores = np.asarray(h['lower_bounds'], dtype=float)
         xs = np.arange(1, len(valores) + 1)
         selecionada = indice == melhor
-        cor = '#235a93' if selecionada else cores[(indice - 1) % len(cores)]
+        cor = cores[(indice - 1) % len(cores)]
         rotulo = f'Init {indice}'
         if selecionada:
             rotulo += ' — selecionada'
         if not h['convergiu']:
             rotulo += ' (não convergiu)'
-        ax.plot(xs, valores, color=cor, ls='-' if selecionada else '--',
-                linewidth=2.8 if selecionada else 1.65,
-                alpha=1 if selecionada else .78, label=rotulo,
+        ax.plot(xs, valores, color=cor, ls='-' if selecionada else ('-.' if indice % 2 else '--'),
+                linewidth=3.2 if selecionada else 2.2,
+                alpha=1.0, label=rotulo,
                 zorder=4 if selecionada else 2)
 
 

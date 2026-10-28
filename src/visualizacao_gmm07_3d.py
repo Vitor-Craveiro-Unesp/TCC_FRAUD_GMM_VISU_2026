@@ -121,13 +121,6 @@ def _png(config, data, escolha, planos, medias, destino, ext, dpi, avaliacao,
     colorbar=fig.colorbar(plt.cm.ScalarMappable(norm=norm,cmap='viridis'),cax=cbax)
     colorbar.ax.tick_params(labelsize=9)
     colorbar.set_label('Score de risco s(x) — mesma escala',fontsize=10,labelpad=10)
-    direcao=('legítima → fraude' if tau < .5 else
-             'fraude → legítima' if tau > .5 else 'nenhuma mudança')
-    fig.text(.5,.086,f'Região hachurada: mudança de classe ({direcao}); '
-             'mesma superfície de risco nos dois limiares.',
-             ha='center',fontsize=10,fontweight='medium',color='#233c57')
-    fig.text(.5,.056,f'{nota} Planos fixados na média do desenvolvimento.',
-             ha='center',fontsize=9.3,color='#596d84')
     saida = Path(destino)/(PREFIXO+'.'+ext)
     try:
         fig.savefig(saida,dpi=dpi,facecolor='white')
