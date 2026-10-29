@@ -3,7 +3,12 @@
 [CmdletBinding()]
 param(
     [ValidateRange(20,1000000)]
-    [int]$PorFold = 1000
+    [int]$PorFold = 1000,
+    [ValidateSet('Automatica', 'Principal', 'Arquivo')]
+    [string]$OrigemConfiguracao = 'Automatica',
+    [string]$ArquivoConfiguracao = '',
+    [ValidateSet('Individuais', 'Painel', 'Ambos', 'Nenhum')]
+    [string]$Abrir = 'Individuais'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -16,6 +21,22 @@ if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { throw 'Execute na raiz 
 if (-not (Test-Path -LiteralPath $cfg -PathType Leaf)) { throw 'YAML principal nao encontrado.' }
 if (-not (Test-Path -LiteralPath (Join-Path $raiz 'src\pre01_v2_diagnostico.py') -PathType Leaf)) {
     throw 'PRE01 V2 nao instalado. O modulo src\pre01_v2_diagnostico.py e necessario.'
+}
+
+# Resolucao explicita da origem. Nenhuma configuracao sera modificada nesta etapa.
+if ($OrigemConfiguracao -eq 'Arquivo') {
+    if ([string]::IsNullOrWhiteSpace($ArquivoConfiguracao)) {
+        throw 'Informe -ArquivoConfiguracao quando usar -OrigemConfiguracao Arquivo.'
+    }
+    if (-not (Test-Path -LiteralPath $ArquivoConfiguracao -PathType Leaf)) {
+        throw "Arquivo YAML de referencia nao encontrado: $ArquivoConfiguracao"
+    }
+    $arquivoParaDriver = (Resolve-Path -LiteralPath $ArquivoConfiguracao).Path
+} else {
+    if (-not [string]::IsNullOrWhiteSpace($ArquivoConfiguracao)) {
+        throw '-ArquivoConfiguracao so pode ser informado com -OrigemConfiguracao Arquivo.'
+    }
+    $arquivoParaDriver = '-'
 }
 
 # Bloquear duas execucoes simultaneas que alterariam o mesmo YAML temporariamente.
@@ -58,6 +79,9 @@ CFG_FILE = ROOT / 'config_TCC_EXPERIMENTAL_V3_atualizado.yaml'
 STAMP = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
 CONTROL = OUT / ('NOVO_TESTE_PCA_1D_2D_3D_K4_NINIT5_' + STAMP)
 BY_FOLD = int(sys.argv[1]) if len(sys.argv) > 1 else 1000
+CONFIG_MODE = sys.argv[2] if len(sys.argv) > 2 else 'Automatica'
+CONFIG_PATH = sys.argv[3] if len(sys.argv) > 3 else '-'
+OPEN_MODE = sys.argv[4] if len(sys.argv) > 4 else 'Individuais'
 DIMS = (1, 2, 3)
 
 
@@ -101,7 +125,19 @@ def intended(cfg):
 
 
 def find_template(original_cfg):
-    # Priorizar exatamente a configuracao mais recente que ja gerou PRE01 V2.
+    # Retornar configuracao, caminho de referencia e bytes exatos para auditoria.
+    if CONFIG_MODE == 'Principal':
+        print('[BASE] Origem escolhida: YAML principal.', flush=True)
+        return deepcopy(original_cfg), CFG_FILE
+    if CONFIG_MODE == 'Arquivo':
+        source = Path(CONFIG_PATH)
+        require(source.is_file(), f'YAML de referencia ausente: {source}')
+        cfg = read_yaml(source)
+        require(isinstance(cfg, dict), f'YAML de referencia invalido: {source}')
+        print(f'[BASE] Origem escolhida: arquivo {source}', flush=True)
+        return cfg, source
+    require(CONFIG_MODE == 'Automatica', f'OrigemConfiguracao desconhecida: {CONFIG_MODE}')
+    # Comportamento anterior preservado: ensaio PRE01 V2 mais recente, se existir.
     choices = []
     for p in OUT.glob('ensaio_pca_gmm_*'):
         if not p.is_dir():
@@ -120,12 +156,14 @@ def find_template(original_cfg):
             continue
     if choices:
         _, p, cfg = max(choices, key=lambda t: t[0])
+        source = p/'configuracao.yaml'
         print(f'[BASE] Ultimo ensaio com PRE01 V2: {p.name}', flush=True)
     else:
         cfg = deepcopy(original_cfg)
-        print('[BASE] Nenhum trio PRE01 V2 anterior localizado; usando YAML principal.', flush=True)
+        source = CFG_FILE
+        print('[BASE] Nenhum ensaio PRE01 V2 anterior localizado; usando YAML principal.', flush=True)
     require(isinstance(cfg, dict), 'Configuracao-base invalida.')
-    return cfg
+    return cfg, source
 
 
 def make_cfg(template, dim):
@@ -257,7 +295,13 @@ def main():
     CONTROL.mkdir(parents=False,exist_ok=False)
     original=CFG_FILE.read_bytes()
     (CONTROL/'YAML_PRINCIPAL_ORIGINAL.yaml').write_bytes(original)
-    templ=find_template(yaml.safe_load(original.decode('utf-8-sig')))
+    templ, template_source = find_template(yaml.safe_load(original.decode('utf-8-sig')))
+    source_blob = original if template_source.resolve() == CFG_FILE.resolve() else template_source.read_bytes()
+    templ = yaml.safe_load(source_blob.decode('utf-8-sig'))
+    require(isinstance(templ, dict), f'YAML-base invalido: {template_source}')
+    (CONTROL/'YAML_BASE_SELECIONADO.yaml').write_bytes(source_blob)
+    print(f'[BASE] Modo={CONFIG_MODE} | arquivo={template_source}', flush=True)
+    print(f'[BASE] SHA256={sha256(source_blob).hexdigest()}', flush=True)
     configs={d:make_cfg(templ,d) for d in DIMS}
     assert len({comparable(c) for c in configs.values()})==1
     trio={}
@@ -289,8 +333,9 @@ def main():
             require(x['meta'].get(h)==ref['meta'].get(h),
                     f'Hash {h} diferente entre PCA {d}D e PCA 1D.')
     print('[AUDITORIA] Mesmo conjunto de observacoes, folds e hiperparametros nas tres dimensoes.',flush=True)
-    # Integrar PRE01 V2. Se falhar, panel ainda sera criado mas sem alegar sucesso do diagnostico.
+    # Se PRE01 V2 falhar, manter galerias/OOF e sinalizar erro real ao chamador.
     pre01_ok=False
+    pre01_error=None
     try:
         run_python('PRE01_V2',['-m','src.pre01_v2_diagnostico',
                                '--raiz',str(ROOT),'--k','4','--n-init','5','--tipo','ensaio'])
@@ -303,24 +348,46 @@ def main():
         pre01_ok=True
         print('[PRE01 V2] Diagnostico completo confirmado nas 3 galerias.',flush=True)
     except Exception as ex:
-        print('[ATENCAO] PRE01 V2 nao foi confirmado: '+str(ex),flush=True)
-        print('[ATENCAO] O painel sera criado com as 3 galerias; consulte o log PRE01_V2_stderr.log.',flush=True)
+        pre01_error=str(ex)
+        print('[FALHA PARCIAL] PRE01 V2 nao foi confirmado: '+pre01_error,flush=True)
+        print('[FALHA PARCIAL] OOF e galerias preservados; consulte o log PRE01_V2_stderr.log.',flush=True)
     path=build_panel(trio,pre01_ok)
     summary={'tipo':'ensaio','k':4,'n_init':5,'por_fold':BY_FOLD,'f10_usado':False,
-             'pre01_v2_confirmado':pre01_ok,'novo_trio':{f'{d}D':str(trio[d]['path']) for d in DIMS},
+             'pre01_v2_confirmado':pre01_ok,'pre01_v2_erro':pre01_error,
+             'status_geral':'concluido' if pre01_ok else 'parcial_pre01_v2',
+             'origem_configuracao_modo':CONFIG_MODE,
+             'origem_configuracao_arquivo':str(template_source),
+             'sha256_yaml_base_selecionado':sha256(source_blob).hexdigest(),
+             'novo_trio':{f'{d}D':str(trio[d]['path']) for d in DIMS},
              'painel':str(path),'sha256_yaml_original':sha256(original).hexdigest()}
     (CONTROL/'RESUMO_TRES_GALERIAS.json').write_text(json.dumps(summary,indent=2,ensure_ascii=False),encoding='utf-8')
-    print('\n'+'='*65+'\n[CONCLUIDO] NOVOS TESTES PCA 1D, 2D, 3D\nPAINEL='+str(path),flush=True)
+    status_label = '[CONCLUIDO]' if pre01_ok else '[PARCIAL]'
+    print('\n'+'='*65+'\n'+status_label+' NOVOS TESTES PCA 1D, 2D, 3D\nPAINEL='+str(path),flush=True)
     for d in DIMS:
         print(f'GALERIA_{d}D='+str(trio[d]['gallery']),flush=True)
     print('PRE01_V2='+('CONFIRMADO' if pre01_ok else 'PENDENTE'),flush=True)
     print('F10=RESERVADO',flush=True)
-    if os.environ.get('TCC_NAO_ABRIR_NAVEGADOR')!='1':
-        try:
-            os.startfile(str(path))
-            print('[NAVEGADOR] Solicitada abertura do painel.',flush=True)
-        except (OSError, AttributeError):
-            print('[NAVEGADOR] Abertura automatica falhou. Cole o caminho PAINEL no Explorador.',flush=True)
+    if OPEN_MODE not in ('Individuais', 'Painel', 'Ambos', 'Nenhum'):
+        raise RuntimeError(f'Modo de abertura desconhecido: {OPEN_MODE}')
+    if os.environ.get('TCC_NAO_ABRIR_NAVEGADOR') == '1':
+        print('[NAVEGADOR] Abertura desabilitada por TCC_NAO_ABRIR_NAVEGADOR=1.',flush=True)
+    elif OPEN_MODE == 'Nenhum':
+        print('[NAVEGADOR] Abertura desabilitada por -Abrir Nenhum.',flush=True)
+    else:
+        targets=[]
+        if OPEN_MODE in ('Individuais', 'Ambos'):
+            targets += [(f'PCA {d}D', trio[d]['gallery']) for d in DIMS]
+        if OPEN_MODE in ('Painel', 'Ambos'):
+            targets.append(('Painel consolidado', path))
+        for label, target in targets:
+            try:
+                os.startfile(str(target))
+                print(f'[NAVEGADOR] Solicitada abertura: {label} | {target}',flush=True)
+            except (OSError, AttributeError) as ex:
+                print(f'[NAVEGADOR] Nao foi possivel abrir {label}: {ex} | {target}',flush=True)
+    if not pre01_ok:
+        print('[FALHA PARCIAL] Tres ensaios concluidos, mas PRE01 V2 pendente. Codigo de saida 2.',flush=True)
+        return 2
     return 0
 
 
@@ -340,11 +407,15 @@ $env:PYTHONIOENCODING='utf-8'
 $env:PYTHONUTF8='1'
 $env:MPLBACKEND='Agg'
 $ErrorActionPreference='Continue'  # O driver escreve erros Python no stdout; avisos vao para log.
-Write-Host "[NOVO TESTE] PCA 1D/2D/3D | GMM K4 | n_init=5 | PorFold=$PorFold" -ForegroundColor Cyan
-& $py -u $runner $PorFold
+Write-Host "[NOVO TESTE] PCA 1D/2D/3D | GMM K4 | n_init=5 | PorFold=$PorFold | Origem=$OrigemConfiguracao | Abrir=$Abrir" -ForegroundColor Cyan
+& $py -u $runner $PorFold $OrigemConfiguracao $arquivoParaDriver $Abrir
 $saida = $LASTEXITCODE
+if ($saida -eq 2) {
+    Write-Host '[FALHA PARCIAL] Tres ensaios concluiram, mas PRE01 V2 falhou. Consulte o resumo e os logs em outputs/NOVO_TESTE_PCA_*.' -ForegroundColor Yellow
+    exit 2
+}
 if ($saida -ne 0) {
     Write-Host '[FALHA] Consulte o traceback acima e os logs em outputs/NOVO_TESTE_PCA_*.' -ForegroundColor Red
     exit $saida
 }
-Write-Host '[OK] Novos testes concluidos; painel gerado e abertura solicitada.' -ForegroundColor Green
+Write-Host '[OK] Tres ensaios e PRE01 V2 confirmados. Verifique os caminhos das galerias acima.' -ForegroundColor Green

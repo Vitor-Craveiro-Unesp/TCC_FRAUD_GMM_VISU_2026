@@ -183,7 +183,6 @@ visualizacao:
       gerar_em:
       - oof
       - teste_final
-      mostrar_ap: true
       mostrar_baseline_prevalencia: true
       mostrar_ponto_mcc_oof: true
       mostrar_ponto_05: true
@@ -191,7 +190,6 @@ visualizacao:
       modo_eixos: zoom_automatico
       zoom_recall_alvo: 0.35
       zoom_precision_alvo: 0.08
-      ocultar_ponto_05_degenerado: true
       limites_recall:
       - 0.0
       - 1.0
@@ -207,7 +205,6 @@ visualizacao:
       mostrar_mcc_no_limiar_oof: true
       mostrar_limiar_05: true
       mostrar_mcc_no_limiar_05: true
-      mostrar_linha_mcc_zero: true
       mostrar_resumo_operacional: true
       modo_eixos: zoom_automatico
       zoom_fracao_mcc_relevante: 0.025
