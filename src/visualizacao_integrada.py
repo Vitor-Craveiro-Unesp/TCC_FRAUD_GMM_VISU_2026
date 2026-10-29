@@ -495,7 +495,9 @@ def integrar(experimento, *, planejar=False, complementar_2d=True):
             if not arq.is_file() or arq.suffix.lower() not in FORMATS:
                 continue
             if secao=='oof':
-                permitido=arq.stem in (oof.ARQUIVOS[n] for n in ativos_oof)
+                # PRE01_V2_IGNORAR_PNG
+                permitido=arq.stem in (oof.ARQUIVOS[n] for n in ativos_oof) or arq.name == 'PRE01_diagnostico_padronizacao_completo.html'
+                permitido = permitido and arq.name != 'PRE01_estabilidade_padronizacao_folds.png'
             else:
                 # Ignorar imagens legadas 07/08/09-heatmap/10 ainda no disco.
                 permitido=any(arq.stem.startswith(GEO_PREFIXOS[n]) for n in ativos_geo
