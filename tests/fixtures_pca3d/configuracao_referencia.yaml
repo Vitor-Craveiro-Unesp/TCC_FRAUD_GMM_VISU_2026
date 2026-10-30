@@ -1,0 +1,449 @@
+experimento:
+  nome: TCC_EXPERIMENTAL_V3
+  semente: 42
+dados:
+  fonte_url: https://www.kaggle.com/datasets/kartik2112/fraud-detection/data
+  arquivo: data/raw/dataset_raw.parquet
+  coluna_alvo: TARGET_OMEGA
+  classe_positiva: 1
+  coluna_id: NID_ALPHA
+  colunas_excluir: []
+  fracao_base: 0.1
+divisao:
+  total_folds: 10
+  quantidade_folds_teste: 1
+  qual_fold_teste: 10
+  estratificada: true
+  embaralhar: true
+preprocessamento:
+  identificar_por_sufixo: true
+  encodings:
+    frequency:
+      sufixo: _FEWF
+      tipo: frequencia_relativa
+      fallback: 1/n
+    binary:
+      sufixo: _BE
+      mapeamentos:
+        SEND_GENDER_BE:
+          F: 0
+          M: 1
+        TRANS_YEAR_BE:
+          2019: 0
+          2020: 1
+    onehot:
+      sufixo: _OHEWI
+      handle_unknown: ignore
+  ciclicas:
+    sufixos:
+    - _SIN
+    - _COS
+    ja_transformadas: true
+    padronizar: false
+  numericas:
+    imputacao: mediana
+    padronizacao: true
+  categoricas_sem_sufixo:
+    tratamento: exigir_sufixo
+  verificar_vazamento: true
+amostragem:
+  modo: RUS
+  razao_negativos_positivos: 16
+  aplicar_somente_treino: true
+  risco_historico:
+    metodo: soft_counts
+  base_calculo: treino_original
+reducao:
+  metodo: PCA
+pca:
+  n_components:
+  - 1
+  whiten: false
+  svd_solver: auto
+  iterated_power: auto
+tsne:
+  perplexity:
+  - 10
+  n_components: 2
+  initialization:
+  - random
+  - pca
+  metric: euclidean
+  learning_rate: auto
+  early_exaggeration: 12.0
+  n_iter: 300
+  theta: 0.5
+gmm:
+  n_components:
+  - 4
+  covariance_type: full
+  reg_covar: 1.0e-06
+  max_iter: 300
+  n_init: 5
+  tol: 0.001
+  init_params: kmeans
+risco_historico:
+  metodo: soft_counts
+  suavizacao: 0.0
+  estimar_com: treino_original
+  previsao: soma_ponderada
+validacao_cruzada:
+  estrategia: rotacao_folds_restantes
+  evitar_vazamento: true
+avaliacao:
+  metrica_pr: average_precision
+  calcular_mcc: true
+  calcular_logloss: true
+  calcular_composite: true
+  selecao_limiar: mcc_oof
+  formula_composite: (AP + (MCC + 1)/2 + exp(-LogLoss)) / 3
+  congelar_modelo_antes_teste: true
+execucao:
+  n_jobs: -1
+  usar_cache: true
+  retomar: true
+  diretorio_retomada: null
+  proteger_resultados: true
+saidas:
+  diretorio_base: outputs
+  padrao_pasta: experimento_{metodo}_gmm_{datahora_fim}
+  timezone: America/Sao_Paulo
+  pastas:
+    candidatos: candidatos
+    vencedor: vencedor
+    metricas: metricas
+    oof: oof
+    visualizacao: visualizacao
+    geometria: geometria_desenvolvimento
+    galeria: galeria
+    teste_final: teste_final
+  salvar_configuracao: true
+  salvar_metricas: true
+  salvar_predicoes_oof: true
+  salvar_modelos: true
+  salvar_graficos: true
+  salvar_relatorio: true
+  salvar_manifesto: true
+  registrar_versoes_bibliotecas: true
+visualizacao:
+  habilitar: true
+  gerar_em:
+  - oof
+  - teste_final
+  padrao:
+    formato: png
+    dpi: 180
+    figsize:
+    - 9
+    - 6
+    grade: true
+    titulo: true
+    legenda: true
+    salvar_dados_grafico: true
+  classes:
+    legitima:
+      nome: Legitima
+      cor: '#1f77b4'
+      marcador: o
+      tamanho: 12
+      alpha: 0.45
+    fraude:
+      nome: Fraude
+      cor: '#d62728'
+      marcador: '*'
+      tamanho: 42
+      alpha: 0.9
+  geometria:
+    pares_2d:
+    - - 1
+      - 2
+    - - 1
+      - 3
+    - - 2
+      - 3
+    dimensoes_1d:
+    - 1
+    pontos_maximos_amostra: 20000
+    amostragem_estratificada: true
+  graficos:
+    painel_score_composto:
+      habilitar: true
+      gerar_em:
+      - oof
+      cor_fundo: '#07101f'
+      cor_cartao: '#111d33'
+      figsize:
+      - 10.2
+      - 15.0
+      fonte_titulo: 21
+      fonte_secundaria: 10.5
+      fonte_rodape: 9.6
+    curva_pr:
+      habilitar: true
+      gerar_em:
+      - oof
+      - teste_final
+      mostrar_baseline_prevalencia: true
+      mostrar_ponto_mcc_oof: true
+      mostrar_ponto_05: true
+      mostrar_resumo_operacional: true
+      modo_eixos: zoom_automatico
+      zoom_recall_alvo: 0.35
+      zoom_precision_alvo: 0.08
+      limites_recall:
+      - 0.0
+      - 1.0
+      limites_precision:
+      - 0.0
+      - 1.0
+    curva_mcc:
+      habilitar: true
+      gerar_em:
+      - oof
+      - teste_final
+      mostrar_limiar_oof: true
+      mostrar_mcc_no_limiar_oof: true
+      mostrar_limiar_05: true
+      mostrar_mcc_no_limiar_05: true
+      mostrar_resumo_operacional: true
+      modo_eixos: zoom_automatico
+      zoom_fracao_mcc_relevante: 0.025
+      zoom_quantile_extremo: 0.005
+      zoom_margem_horizontal: 0.07
+      limites_limiar:
+      - 0.0
+      - 1.0
+      pontos_visualizacao: 2000
+    matriz_confusao_05:
+      habilitar: true
+      gerar_em:
+      - oof
+      - teste_final
+      limiar: 0.5
+    matriz_confusao_mcc:
+      habilitar: true
+      gerar_em:
+      - oof
+      - teste_final
+      limiar: mcc_oof
+    distribuicao_probabilidades:
+      habilitar: true
+      gerar_em:
+      - oof
+      - teste_final
+      tipo: histograma
+      bins: 50
+      separar_classes: true
+      normalizar: true
+      modo_eixo_x: zoom_automatico
+      quantil_zoom: 0.995
+      margem_zoom: 0.1
+      escala_y: linear
+      marcar_limiar_oof: true
+      marcar_limiar_05: true
+    comparacao_hiperparametros:
+      habilitar: true
+      gerar_em:
+      - oof
+      metricas:
+      - ap
+      - mcc
+      - logloss
+      - score
+      ordenar_por: score
+      destacar_vencedor: true
+      maximo_configuracoes: 25
+    metricas_por_fold:
+      habilitar: true
+      gerar_em:
+      - oof
+    convergencia_em:
+      habilitar: true
+      gerar_em:
+      - teste_final
+    densidades_marginais:
+      habilitar: true
+      gerar_em:
+      - teste_final
+      pontos_curva: 600
+      margem_sigmas: 4.0
+      pontos_grade_2d: 220
+    regioes_dominancia:
+      habilitar: true
+      gerar_em:
+      - teste_final
+      resolucao_1d: 600
+      resolucao_2d: 180
+      pontos_scatter: 1000
+      margem: 0.15
+    sensibilidade_fronteira:
+      habilitar: true
+      gerar_em:
+      - teste_final
+      resolucao_1d: 500
+      resolucao_2d: 180
+      n_pontos_scatter: 1500
+      margem: 0.15
+    painel_parametros_gaussianos:
+      habilitar: true
+      gerar_em:
+      - teste_final
+      gaussianas_por_pagina: 4
+    pca_cotovelo:
+      habilitar: true
+      gerar_em:
+      - teste_final
+      somente_se_metodo: PCA
+      mostrar_variancia_individual: true
+      mostrar_variancia_acumulada: true
+      destacar_componentes_selecionados: true
+      marcar_acumulados:
+      - 1
+      - 2
+      - 3
+      linhas_referencia_acumulada:
+      - 0.8
+      - 0.9
+      - 0.95
+    pca_projecoes:
+      habilitar: true
+      gerar_em:
+      - teste_final
+      somente_se_metodo: PCA
+      bins_histograma_1d: 36
+      curvas_suavizadas_1d: true
+      marcar_media_pc1_1d: true
+      mostrar_dados_desenvolvimento: true
+      mostrar_dados_teste: true
+      colorir_por: classe_real
+      mostrar_contornos_gaussianas: false
+      usar_estilos_classes: true
+    pca_biplot:
+      habilitar: true
+      gerar_em:
+      - teste_final
+      somente_se_metodo: PCA
+      max_setas: 6
+    tsne_trustworthiness:
+      habilitar: true
+      gerar_em:
+      - teste_final
+      somente_se_metodo: TSNE
+      perplexidades:
+      - 5
+      - 10
+      - 20
+      - 30
+      - 50
+      - 80
+      incluir_perplexity_vencedora: true
+      tamanho_amostra_maximo: 360
+      vizinhos_trustworthiness: 10
+    tsne_mapa:
+      habilitar: true
+      gerar_em:
+      - teste_final
+      somente_se_metodo: TSNE
+      mostrar_dados_desenvolvimento: true
+      mostrar_dados_teste: true
+      colorir_por: classe_real
+      usar_estilos_classes: true
+      mostrar_contornos_gaussianas: false
+    tsne_diagnostico:
+      habilitar: true
+      gerar_em:
+      - teste_final
+      somente_se_metodo: TSNE
+      mostrar_kl_final: true
+      mostrar_kl_por_iteracao: true
+      mostrar_tempo_execucao: true
+    mapa_risco_fronteira:
+      habilitar: true
+      gerar_em:
+      - teste_final
+      limiares:
+      - 0.5
+      - mcc_oof
+      n_pontos_scatter: 5000
+      resolucao_1d: 500
+      resolucao_2d: 180
+      margem: 0.15
+      mostrar_gaussianas: true
+      cobertura_gaussiana: 0.95
+      fixar_demais_dimensoes: media_desenvolvimento
+  estilo_matrizes:
+    layout: quadrantes_pdf
+    faixas_qualidade:
+      tn:
+      - 85.0
+      - 97.0
+      fp:
+      - 1.0
+      - 5.0
+      fn:
+      - 10.0
+      - 30.0
+      tp:
+      - 40.0
+      - 70.0
+    cores_painel:
+      fundo: '#091425'
+      cartao: '#12213b'
+      borda: '#294766'
+      texto: '#f6f8fc'
+      secundario: '#b2bfd3'
+    mostrar:
+      contagem_observada: true
+      contagem_ideal: true
+      percentual_proximidade: true
+      percentual_da_classe: true
+      diferenca_absoluta_do_ideal: true
+      rotulo_tn_fp_fn_tp: true
+      descricao_quadrante: true
+      totais_linhas_colunas: true
+    escala_proximidade:
+      metodo: proximidade_ideal
+      minimo: 0.0
+      maximo: 100.0
+      cor_longe: '#f7fbff'
+      cor_meio: '#6baed6'
+      cor_perto: '#08306b'
+      adaptar_cor_texto: true
+    bordas:
+      tn: '#2ca02c'
+      fp: '#ff7f0e'
+      fn: '#9467bd'
+      tp: '#d62728'
+    rodape:
+      accuracy: false
+      precision: true
+      recall_sensibilidade: true
+      especificidade: true
+      f1: true
+      fpr: true
+      fnr: true
+      mcc: true
+      prevalencia: true
+  relatorio_gaussianas:
+    habilitar: true
+    gerar_em:
+    - teste_final
+    salvar_csv: true
+    salvar_json: true
+    salvar_markdown: true
+    campos:
+      indice: true
+      peso_mistura: true
+      massa_responsabilidade_total: true
+      massa_ponderada_fraudes: true
+      massa_ponderada_legitimas: true
+      risco_historico: true
+      razao_risco_prevalencia: true
+      media_vetor_completo: true
+      covariancia_ou_variancia_completa: true
+      rotulo_descritivo_risco: true
+    rotulo_descritivo:
+      estrategia: relativo_prevalencia
+      multiplicador_prevalencia: 2.0
+      rotulo_alto: alto_risco_fraude
+      rotulo_baixo: baixo_risco_fraude

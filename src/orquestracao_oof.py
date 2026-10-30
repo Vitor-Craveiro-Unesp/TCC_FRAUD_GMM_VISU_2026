@@ -519,8 +519,19 @@ def main(argv=None, *, raiz=None):
     raiz=Path(raiz) if raiz else Path(__file__).resolve().parents[1]
     if a.concluir_teste_final:
         if a.experimento is None:parser.error('--concluir-teste-final exige --experimento.')
-        from src.finalizacao_automatica_pca1d import concluir_ensaio
         alvo = raiz/a.experimento if not a.experimento.is_absolute() else a.experimento
+        config_salva=alvo/'configuracao.yaml'
+        if not config_salva.is_file():
+            raise RuntimeError('Configuração do experimento de retomada ausente.')
+        dim=yaml.safe_load(config_salva.read_text(encoding='utf-8-sig'))['pca']['n_components']
+        if dim == [1]:
+            from src.finalizacao_automatica_pca1d import concluir_ensaio
+        elif dim == [2]:
+            from src.finalizacao_automatica_pca2d import concluir_ensaio
+        elif dim == [3]:
+            from src.finalizacao_automatica_pca3d import concluir_ensaio
+        else:
+            raise RuntimeError('Dimensão PCA de retomada não suportada.')
         concluir_ensaio(alvo)
         return alvo
     if a.so_visualizacoes:
@@ -538,8 +549,10 @@ def main(argv=None, *, raiz=None):
             from src.finalizacao_automatica_pca1d import validar_automacao
         elif dim == [2]:
             from src.finalizacao_automatica_pca2d import validar_automacao
+        elif dim == [3]:
+            from src.finalizacao_automatica_pca3d import validar_automacao
         else:
-            raise RuntimeError('Finalizacao automatica disponivel apenas para PCA 1D ou 2D.')
+            raise RuntimeError('Finalizacao automatica disponivel apenas para PCA 1D, 2D ou 3D.')
         validar_automacao(config)
     if a.planejar:
         planejar(config)
@@ -586,10 +599,15 @@ def main(argv=None, *, raiz=None):
     executar_visualizacoes(final)
     if automatizar_f10 and a.executar:
         print('[ORQUESTRADOR] Iniciando finalizacao automatica PCA (F1-F9 + F10 exploratorio)...',flush=True)
-        if config.get('pca', {}).get('n_components') == [1]:
+        dim=config.get('pca', {}).get('n_components')
+        if dim == [1]:
             from src.finalizacao_automatica_pca1d import concluir_ensaio
-        else:
+        elif dim == [2]:
             from src.finalizacao_automatica_pca2d import concluir_ensaio
+        elif dim == [3]:
+            from src.finalizacao_automatica_pca3d import concluir_ensaio
+        else:
+            raise RuntimeError('Dimensionalidade PCA final invalida.')
         concluir_ensaio(final)
         print('[ORQUESTRADOR] COMPLETO: OOF, modelo final, F10 e galeria no mesmo experimento.',flush=True)
     return final
