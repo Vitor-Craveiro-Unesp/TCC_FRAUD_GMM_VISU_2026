@@ -57,7 +57,7 @@ reducao:
   metodo: PCA
 pca:
   n_components:
-  - 2
+  - 1
   whiten: false
   svd_solver: auto
   iterated_power: auto
@@ -99,6 +99,7 @@ avaliacao:
   formula_composite: (AP + (MCC + 1)/2 + exp(-LogLoss)) / 3
   congelar_modelo_antes_teste: true
 execucao:
+  finalizacao_pca1d_automatica: true
   n_jobs: -1
   usar_cache: true
   retomar: true

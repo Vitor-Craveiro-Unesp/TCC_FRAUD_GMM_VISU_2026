@@ -511,11 +511,18 @@ def main(argv=None, *, raiz=None):
     modos.add_argument('--ensaio',action='store_true',help='Amostra estratificada por fold; NAO e experimento final.')
     modos.add_argument('--executar',action='store_true',help='OOF e visualizacoes automaticas.')
     modos.add_argument('--so-visualizacoes',action='store_true',help='Retomar as visualizacoes de um ensaio OOF concluido.')
+    modos.add_argument('--concluir-teste-final',action='store_true',help='Completar F10 de OOF ja concluido sem repetir treinamento OOF.')
     parser.add_argument('--por-fold',type=int,default=300,help='Linhas por fold em --ensaio (>=4).')
     parser.add_argument('--experimento',type=Path,help='Pasta concluida, exigida em --so-visualizacoes.')
     a=parser.parse_args(argv)
     if a.por_fold < 4: parser.error('--por-fold precisa ser >=4.')
     raiz=Path(raiz) if raiz else Path(__file__).resolve().parents[1]
+    if a.concluir_teste_final:
+        if a.experimento is None:parser.error('--concluir-teste-final exige --experimento.')
+        from src.finalizacao_automatica_pca1d import concluir_ensaio
+        alvo = raiz/a.experimento if not a.experimento.is_absolute() else a.experimento
+        concluir_ensaio(alvo)
+        return alvo
     if a.so_visualizacoes:
         if a.experimento is None:parser.error('--so-visualizacoes requer --experimento.')
         executar_visualizacoes(raiz/a.experimento if not a.experimento.is_absolute() else a.experimento)
@@ -524,10 +531,16 @@ def main(argv=None, *, raiz=None):
     yaml_bytes=arquivo_yaml.read_bytes()
     config=yaml.safe_load(yaml_bytes.decode('utf-8-sig'))
     validar_operacao(config)
+    automatizar_f10 = bool(config.get('execucao', {}).get('finalizacao_pca1d_automatica', False))
+    if automatizar_f10:
+        from src.finalizacao_automatica_pca1d import validar_automacao
+        validar_automacao(config)
     if a.planejar:
         planejar(config)
+        if automatizar_f10:
+            print('ETAPA FINAL AUTOMATICA: F1-F9 final, F10 exploratorio 10%, 12 graficos e PRE01.')
         return None
-    if a.experimento is not None:parser.error('--experimento apenas com --so-visualizacoes.')
+    if a.experimento is not None:parser.error('--experimento apenas com --so-visualizacoes ou --concluir-teste-final.')
     arquivo_base=raiz/config['dados']['arquivo']
     folds_orig, arquivo_folds, hash_dados = _identificar_folds(raiz,config,arquivo_base)
     y_original=_ler_alvo(arquivo_base,config['dados']['coluna_alvo'])
@@ -565,11 +578,19 @@ def main(argv=None, *, raiz=None):
     final=_finalizar(pasta,manifest,config)
     print(f'PASSO 06.03 - EXECUCAO CONCLUIDA EM {final}')
     executar_visualizacoes(final)
+    if automatizar_f10 and a.executar:
+        print('[ORQUESTRADOR] Iniciando finalizacao automatica PCA1D (F1-F9 + F10 exploratorio)...',flush=True)
+        from src.finalizacao_automatica_pca1d import concluir_ensaio
+        concluir_ensaio(final)
+        print('[ORQUESTRADOR] COMPLETO: OOF, modelo final, F10 e galeria no mesmo experimento.',flush=True)
     return final
 
 
 def executar_visualizacoes(experimento):
     """Orquestra 07.01, 07.02 e 07.03, com retomada sem refazer OOF."""
+    # Avisos nao-fatais de substituicao de fonte nao devem interromper o PowerShell.
+    import logging
+    logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
     from src import visualizacao_oof, visualizacao_geometrica, visualizacao_integrada
     experimento=Path(experimento).resolve()
     caminho_manifest=experimento/'manifesto.json'
