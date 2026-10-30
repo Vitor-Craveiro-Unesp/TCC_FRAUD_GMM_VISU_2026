@@ -57,7 +57,7 @@ reducao:
   metodo: PCA
 pca:
   n_components:
-  - 1
+  - 2
   whiten: false
   svd_solver: auto
   iterated_power: auto
