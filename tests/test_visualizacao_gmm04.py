@@ -52,7 +52,7 @@ def test_regioes_por_dimensao_sem_f10(cfg,tmp_path,d):
     g04.gerar(cfg,dados,tmp_path,'png',65,True)
     png=tmp_path/f'GMM04_dominancia_{d}d.png'
     assert png.is_file() and png.stat().st_size>10000
-    tabelas=list(tmp_path.glob('GMM04_*.csv'))
+    tabelas=list(tmp_path.glob('GMM04_malha_*.csv')) if d in (2,3) else list(tmp_path.glob('GMM04_dominancia_1d.csv'))
     assert len(tabelas)==(1 if d in (1,2) else 3)
     for arq in tabelas:
         df=pd.read_csv(arq)
@@ -92,4 +92,8 @@ def test_galeria_exige_gmm04_com_dimensao_correta(cfg,tmp_path,d):
     assert pronto==(d==1)
     (pasta/f'GMM04_dominancia_{d}d.png').write_bytes(b'png')
     _,_,_,_,_,pronto=galeria._verificar_geracoes(exp,cfg,esc,executar=False)
+    if d==3:
+        assert not pronto  # falta o HTML 3D interativo oficial
+        (pasta/'GMM04_dominancia_3d_INTERATIVA.html').write_text('<html>simulado</html>',encoding='utf-8')
+        _,_,_,_,_,pronto=galeria._verificar_geracoes(exp,cfg,esc,executar=False)
     assert pronto

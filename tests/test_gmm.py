@@ -18,7 +18,10 @@ def config():
     with (ROOT / "config_TCC_EXPERIMENTAL_V3_atualizado.yaml").open(
         encoding="utf-8-sig"
     ) as arq:
-        return yaml.safe_load(arq)
+        cfg = yaml.safe_load(arq)
+        # Grade sintetica do teste; producao permanece GMM K=4.
+        cfg['gmm']['n_components'] = [2, 4, 6]
+        return cfg
 
 
 @pytest.fixture

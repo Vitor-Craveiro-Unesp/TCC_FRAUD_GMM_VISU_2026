@@ -87,6 +87,8 @@ def test_tres_candidatos_seleciona_score_e_isola_f10(monkeypatch,tmp_path):
     from src.validacao_oof import grade_candidatos_oof
     config=yaml.safe_load((Path(__file__).resolve().parents[1] /
         'config_TCC_EXPERIMENTAL_V3_atualizado.yaml').read_text(encoding='utf-8-sig'))
+    # Grade artificial de tres candidatos, independente do YAML de producao.
+    config['gmm']['n_components'] = [2, 4, 6]
     folds_orig=np.repeat(np.arange(1,11),6).astype(np.uint8)
     orig=np.flatnonzero(folds_orig!=10)
     fdev=folds_orig[orig]

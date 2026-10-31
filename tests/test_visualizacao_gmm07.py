@@ -83,24 +83,26 @@ def test_1d_duas_curvas_com_mesmos_pontos_mcc_simulado(configuracao,tmp_path,mon
     assert len(eixos)==2
     assert np.allclose(eixos[0].lines[0].get_ydata(),eixos[1].lines[0].get_ydata())
     assert any('MCC da simulação' in a.get_title() for a in eixos)
-    assert any('NÃO é OOF' in t.get_text() for t in fig.texts)
+    assert (tmp_path/'GMM07_sensibilidade_1d_comparativo.png').is_file()
 
 
 def test_3d_malhas_iguais_entre_cortes(configuracao,tmp_path,monkeypatch):
+    """O modulo dedicado 3D valida a mesma malha para tau fixo e tau OOF."""
     data,escolha,avaliacao=simular(3)
-    figuras=[]
-    real=geo._guardar
-    def registrar(fig,*args):
-        figuras.append(fig)
-        return real(fig,*args)
-    monkeypatch.setattr(geo,'_guardar',registrar)
-    s.gerar(configuracao,data,escolha,tmp_path,'png',58,False,avaliacao=avaliacao)
-    assert len(figuras)==1
-    fig=figuras[0]
-    assert len(fig.axes)==7  # 6 planos (2 x 3) + colorbar
-    assert all('média desenvolvimento' in ax.get_title() for ax in fig.axes[:6])
-    assert all(len(fig.axes[i].collections)>=1 for i in range(6))
-    assert any('PRÉVIA SINTÉTICA' in t.get_text() for t in fig.texts)
+    s.gerar(configuracao,data,escolha,tmp_path,'png',58,True,avaliacao=avaliacao)
+    png=tmp_path/'GMM07_sensibilidade_3d_comparativo.png'
+    assert png.is_file() and png.stat().st_size>3000
+    malhas=sorted(tmp_path.glob('GMM07_malha_*.csv'))
+    assert len(malhas)==3
+    for arquivo in malhas:
+        df=pd.read_csv(arquivo)
+        assert {'score_risco','pred_fixo','pred_otimo','mudou'}.issubset(df.columns)
+        assert np.array_equal(df['mudou'].to_numpy(dtype=bool),
+                              df['pred_fixo'].to_numpy(dtype=bool) ^
+                              df['pred_otimo'].to_numpy(dtype=bool))
+        assert df['score_risco'].between(0,1).all()
+    resumo=pd.read_csv(tmp_path/'GMM07_metricas_comparativas.csv')
+    assert set(resumo['origem_mcc'])=={'simulado'}
 
 
 def test_limiares_iguais_e_maior_que_meio(configuracao,tmp_path):

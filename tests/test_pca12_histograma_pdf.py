@@ -60,9 +60,9 @@ def test_pca12_histograma_1d_e_csv_completo(tmp_path, monkeypatch):
     cap = capturas[0]
     assert cap['bins'] >= 36
     assert 'Histograma' in cap['titulo']
-    assert 'PC1' in cap['xlabel'] and '%' in cap['xlabel']
+    assert 'PC1' in cap['xlabel'] and f"{data['redutor'].modelo_.explained_variance_ratio_[0]:.7f}" in cap['xlabel']
     assert 'Densidade' in cap['ylabel']
-    assert 'PREVIA' in '\n'.join(cap['texto']).upper() or 'PRÉVIA' in '\n'.join(cap['texto']).upper()
+    assert 'variância explicada' in cap['xlabel'].lower()
     assert cap['legenda']
     assert (tmp_path / '12_pca_projecao_PC1.png').exists()
     df = pd.read_csv(tmp_path / '12_pca_projecao_PC1.csv')

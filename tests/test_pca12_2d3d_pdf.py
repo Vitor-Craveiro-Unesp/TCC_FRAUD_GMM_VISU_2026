@@ -63,7 +63,7 @@ def test_pca12_projecao_pdf_sintetica(d, tmp_path, monkeypatch):
         eixo = [ax.get_xlabel(), ax.get_ylabel(), ax.get_zlabel() if d == 3 else ''][j]
         assert f'PC{j+1}' in eixo
         assert f'{data["redutor"].modelo_.explained_variance_ratio_[j]:.1%}' in eixo
-    assert 'PRÉVIA SINTÉTICA' in '\n'.join(t.get_text() for t in fig.texts)
+    assert fig.axes[0].has_data()  # eixos e pontos da projecao efetiva
     tabela = pd.read_csv(tmp_path / f'{nome}.csv')
     assert len(tabela) == len(data['y'])
     assert tabela['exibido_na_imagem'].sum() == 700

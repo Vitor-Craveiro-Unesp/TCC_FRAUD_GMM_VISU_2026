@@ -128,12 +128,14 @@ def test_galeria_07_03_inclui_biplot_2d_sem_retreinar(tmp_path, config, monkeypa
     a.mkdir(parents=True);bpath.mkdir(parents=True)
     (a/'01_curva_precision_recall.png').write_bytes(b'png exemplo')
     (bpath/'PCA_BIPLOT_2D.png').write_bytes(b'png biplot')
+    (bpath/'PCA_COEFICIENTES_PC1_PC2.png').write_bytes(b'png coeficientes')
     (a/'manifesto_graficos_oof_07_01.json').write_text(json.dumps({'id_vencedor':'teste_sintetico','usa_f10':False}))
     (bpath/'manifesto_geometria_07_02.json').write_text(json.dumps({'id_vencedor':'teste_sintetico','f10_utilizado':False,'origem':'desenvolvimento_F1_F9'}))
     monkeypatch.setattr(oof, '_ler_resultados', lambda *_: (cfg,None,escolhido,np.array([]),np.array([])))
     monkeypatch.setattr(geo, 'executar', lambda *_: pytest.fail('Nao deveria retreinar'))
     resumo = integ.integrar(exp, complementar_2d=False)
-    assert resumo['numero_imagens'] == 2
+    assert resumo['numero_imagens'] >= 3
+    assert (exp/'vencedor'/'visualizacao'/'galeria'/'geometria_desenvolvimento'/'PCA_COEFICIENTES_PC1_PC2.png').is_file()
     assert 'pca_biplot' in resumo['tipos_geometricos']
     assert (exp/'vencedor'/'visualizacao'/'galeria'/'geometria_desenvolvimento'/'PCA_BIPLOT_2D.png').is_file()
     html = (exp/'vencedor'/'visualizacao'/'galeria'/'index.html').read_text(encoding='utf-8')

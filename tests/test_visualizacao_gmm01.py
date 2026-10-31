@@ -45,7 +45,10 @@ def test_figuras_separadas_por_dimensao(d,tmp_path,monkeypatch):
         return anterior(fig,dest,stem,ext,dpi)
     monkeypatch.setattr(geo,'_guardar',registrar)
     m.gerar(c,_simular(d),tmp_path,'png',75,True)
-    assert len(capturas)==d
+    assert len(capturas)==(4 if d==2 else d)
+    if d==2:
+        assert (tmp_path/'GMM01_densidade_conjunta_2d_PC1_PC2.png').is_file()
+        assert (tmp_path/'GMM01_densidade_conjunta_superficie_PCA2D.png').is_file()
     for j in range(d):
         stem=f'GMM01_densidade_marginal_{d}d_PC{j+1}'
         assert (tmp_path/f'{stem}.png').is_file()
@@ -53,7 +56,7 @@ def test_figuras_separadas_por_dimensao(d,tmp_path,monkeypatch):
         assert len(tabela)==800
         assert np.allclose(tabela['densidade_mistura'],tabela[[f'contribuicao_G{k}' for k in range(1,4)]].sum(axis=1))
         assert set(tabela.columns)=={'coordenada','densidade_mistura','contribuicao_G1','contribuicao_G2','contribuicao_G3'}
-        assert capturas[j][1][-1]=='Mistura marginal total'
+        assert capturas[j][1][-1]=='Mistura total'
         assert all(f'G{k} ' in cap for k,cap in enumerate(capturas[j][1][:3],start=1))
 
 
@@ -105,5 +108,9 @@ def test_galeria_exige_numero_exato_de_marginais(tmp_path,monkeypatch):
     *_,_,tem_geo=galeria._verificar_geracoes(exp,cfg,choice,executar=False)
     assert not tem_geo
     (dest/'GMM01_densidade_marginal_2d_PC2.png').write_bytes(b'png')
+    *_,_,tem_geo=galeria._verificar_geracoes(exp,cfg,choice,executar=False)
+    assert not tem_geo  # ainda faltam as duas conjuntas obrigatorias de PCA2D
+    (dest/'GMM01_densidade_conjunta_2d_PC1_PC2.png').write_bytes(b'png')
+    (dest/'GMM01_densidade_conjunta_superficie_PCA2D.png').write_bytes(b'png')
     *_,_,tem_geo=galeria._verificar_geracoes(exp,cfg,choice,executar=False)
     assert tem_geo

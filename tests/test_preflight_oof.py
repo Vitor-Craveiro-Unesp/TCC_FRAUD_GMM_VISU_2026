@@ -16,7 +16,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def cfg():
-    return yaml.safe_load((ROOT/p.YAML_OFICIAL).read_text(encoding='utf-8-sig'))
+    config = yaml.safe_load((ROOT/p.YAML_OFICIAL).read_text(encoding='utf-8-sig'))
+    # Preflight sintetico mede a grade de tres candidatos, nao o GMM K4 oficial.
+    config['gmm']['n_components'] = [2, 4, 6]
+    return config
 
 
 def test_estimativa_ram_positiva_e_dependente_de_linhas():

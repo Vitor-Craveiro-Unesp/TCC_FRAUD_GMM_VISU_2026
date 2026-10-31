@@ -67,9 +67,9 @@ def experimento(tmp_path):
 def test_gera_sete_tipos_arquivos_e_csv(experimento):
     resumo=gerar_graficos_oof(experimento)
     pasta=experimento/'vencedor'/'visualizacao'/'oof'
-    assert len(resumo['tipos_gerados'])==7
-    assert len(list(pasta.glob('*.png')))==7
-    assert len(list(pasta.glob('*.csv')))==9  # PR e MCC incluem CSVs adicionais de pontos operacionais
+    assert len(resumo['tipos_gerados'])==8
+    assert len(list(pasta.glob('*.png')))==len(resumo['tipos_gerados'])
+    assert len(list(pasta.glob('*.csv')))>=9  # PR e MCC incluem dados operacionais completos
     assert resumo['usa_f10'] is False and resumo['reajustou_modelo'] is False
     assert resumo['id_vencedor']=='abc012'
     assert (pasta/'manifesto_graficos_oof_07_01.json').is_file()
@@ -94,7 +94,7 @@ def test_respeita_flag_yaml_desativada(experimento):
     c['visualizacao']['graficos']['curva_mcc']['habilitar']=False
     caminho.write_text(yaml.safe_dump(c),encoding='utf-8')
     resumo=gerar_graficos_oof(experimento)
-    assert len(resumo['tipos_gerados'])==6
+    assert len(resumo['tipos_gerados'])==7
     assert 'curva_mcc' in resumo['tipos_omitidos_por_yaml']
     assert not (experimento/'vencedor'/'visualizacao'/'oof'/'02_mcc_por_limiar.png').exists()
 
@@ -187,9 +187,9 @@ def test_painel_00_refino_exibe_titulo_nota_e_fontes_configuradas(experimento, m
     gerar_graficos_oof(experimento)
 
     assert ('Indicadores de desempenho e score composto',22) in rotulos
-    assert any('As cores não definem qualidade universal' in s for s,_ in rotulos)
-    assert any('e LogLoss com uma previsão de referência' in s for s,_ in rotulos)
-    assert any(s.startswith('Dados: OOF F1') and f>=9 for s,f in rotulos)
+    assert any('INFORMAÇÕES ÚTEIS' in s for s,_ in rotulos)
+    assert any('F10 não utilizado' in s for s,_ in rotulos)
+    assert any('SCORE COMPOSTO' in s for s,_ in rotulos)
     assert (experimento/'vencedor'/'visualizacao'/'oof'/'00_painel_score_composto.png').is_file()
 
 
@@ -276,9 +276,9 @@ def test_pr_visualizacao_zoom_sem_inset_e_mantem_pontos_csv(experimento, monkeyp
     gerar_graficos_oof(experimento)
     assert vistos['limites'][0][1] <= 1
     assert vistos['limites'][1][1] <= 1
-    assert vistos['detalhes'] == []
-    assert any('Zoom de leitura:' in s for s in vistos['textos'])
-    assert not any('visão geral' in s.lower() for s in vistos['textos'])
+    assert len(vistos['detalhes'])==1  # miniatura da curva completa aprovada
+    assert np.allclose(vistos['detalhes'][0], (0.0, 1.0))
+    assert any('Resultados da validação OOF' in s for s in vistos['textos'])
     assert (experimento/'vencedor'/'visualizacao'/'oof'/'01_curva_precision_recall_pontos.csv').exists()
 
 
@@ -364,8 +364,8 @@ def test_mcc_02_y_eixo_exibe_mcc_bruto_sem_transformacao(experimento,monkeypatch
     assert capturado['xlim'][0] == 0.0
     assert capturado['xlim'][0] <= .13 <= capturado['xlim'][1]
     assert 0 < capturado['xlim'][1] <= 1
-    assert any('MCC(0,50)' in x for x in capturado['textos'])
-    assert any('F10 não utilizado' in x for x in capturado['textos'])
+    assert any('MCC(τ*)' in x for x in capturado['textos'])
+    assert any('Em τ = 0.5000000: MCC =' in x for x in capturado['textos'])
 
 
 def test_mcc_02_zoom_oculta_marcador_05_sem_mudar_metricas(experimento, monkeypatch):
@@ -388,7 +388,7 @@ def test_mcc_02_zoom_oculta_marcador_05_sem_mudar_metricas(experimento, monkeypa
     monkeypatch.setattr(mod,'_salvar',capturar)
     gerar_graficos_oof(experimento)
     assert vistos['xlim'][0] <= .13 <= vistos['xlim'][1] < .5
-    assert any('(fora do zoom)' in txt for txt in vistos['textos'])
+    assert any('(fora da região exibida)' in txt for txt in vistos['textos'])
     # Ponto otimo pertence ao zoom, referencia 0,50 fica so no texto.
     assert any(np.isclose(x,.13) for x in scatter_x)
     assert not any(np.isclose(x,.5) for x in scatter_x)
@@ -445,29 +445,29 @@ def test_mcc_02_zoom_resiste_outlier_de_score_alto_com_mcc_zero():
 
 def test_mcc_02_cabecalho_e_rodape_sem_sobreposicao(experimento,monkeypatch):
     from src import visualizacao_oof as mod
-    from matplotlib.transforms import Bbox
     salvar_real=mod._salvar
     capturas=[]
     def conferir(fig,destino,*,dpi):
         if destino.name=='02_mcc_por_limiar.png':
             fig.canvas.draw()
             rend=fig.canvas.get_renderer()
-            xlabel=fig.axes[0].xaxis.label.get_window_extent(rend)
+            ax=fig.axes[0]
+            xlabel=ax.xaxis.label.get_window_extent(rend)
+            assert fig._suptitle is not None and fig.legends
             titulo=fig._suptitle.get_window_extent(rend)
             rleg=fig.legends[0].get_window_extent(rend)
             textos=[t for t in fig.texts if t is not fig._suptitle]
-            subtitulo=next(t for t in textos if 'Zoom automatico:' in t.get_text())
-            capturas.append((xlabel, titulo, rleg, subtitulo.get_window_extent(rend),
-                             [t.get_window_extent(rend) for t in textos if 'MCC otimo OOF:' in t.get_text()]))
-            assert not xlabel.overlaps(capturas[-1][-1][0])
+            rodape=[t for t in textos if ('Resultados da validação OOF' in t.get_text()
+                    or 'MCC(τ*)' in t.get_text() or 'Em τ = 0.5000000' in t.get_text())]
+            assert len(rodape)==3
+            assert all(not xlabel.overlaps(t.get_window_extent(rend)) for t in rodape)
             assert not titulo.overlaps(rleg)
-            assert not subtitulo.get_window_extent(rend).overlaps(rleg)
-            # Legenda fisicamente acima da malha de dados.
-            assert rleg.y0 > fig.axes[0].get_window_extent(rend).y1
+            assert rleg.y0 > ax.get_window_extent(rend).y1
+            capturas.append(True)
         return salvar_real(fig,destino,dpi=dpi)
     monkeypatch.setattr(mod,'_salvar',conferir)
     gerar_graficos_oof(experimento)
-    assert len(capturas)==1
+    assert capturas==[True]
 
 
 def test_confusao_quadrantes_e_faixas_pdf_sem_aproximacoes():

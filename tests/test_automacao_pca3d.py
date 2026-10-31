@@ -78,9 +78,9 @@ def test_correcao_legendas_puramente_visual(m):
 
 def test_html_corrige_origem_e_preserva_estrutura(tmp_path,m):
     p=tmp_path/'GMM07_sensibilidade_3d_comparativo_INTERATIVA.html'
-    p.write_text('<html><h2>Observações do desenvolvimento</h2><p>F10 não utilizado.</p></html>')
+    p.write_text('<html><h2>Observações do desenvolvimento</h2><p>F10 não utilizado.</p></html>', encoding='utf-8')
     m._normalizar_html_interativo(tmp_path)
-    h=p.read_text()
+    h=p.read_text(encoding='utf-8')
     assert '<html>' in h and 'Observações F10' in h and 'F10 exploratório' in h
 
 

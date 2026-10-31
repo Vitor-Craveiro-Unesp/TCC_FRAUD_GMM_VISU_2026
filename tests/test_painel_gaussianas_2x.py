@@ -24,7 +24,8 @@ def dados_exemplo(d=3,k=4):
       massas_=pd.Series(weights*10000,index=names),
       fraudes_ponderadas_=pd.Series(weights*10000*risk,index=names),
       prevalencia_treino_=.0052,n_treino_=10000)
-    return {'gmm':gmm,'rh':rh,'coord':pd.DataFrame(np.zeros((10,d)),columns=[f'PC{i+1}' for i in range(d)])}
+    return {'gmm':gmm,'rh':rh,'coord':pd.DataFrame(np.zeros((10,d)),columns=[f'PC{i+1}' for i in range(d)]),
+            'n_treino_gmm':10, 'y':np.zeros(10,dtype=np.uint8)}
 
 @pytest.fixture
 def c():return yaml.safe_load(CFG_PATH.read_text(encoding='utf-8'))

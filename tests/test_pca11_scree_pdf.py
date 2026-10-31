@@ -39,7 +39,8 @@ def test_pca11_barras_linha_marcacoes_e_csv(tmp_path, monkeypatch):
     assert capturas[0]['n_barras'] == 9
     assert capturas[0]['eixos'] == 2
     assert capturas[0]['n_linhas'] >= 4  # curva + 80%, 90%, 95%
-    assert any('C(1)' in txt and 'C(2)' in txt and 'C(3)' in txt for txt in capturas[0]['titulos'])
+    assert np.isclose(tab['variancia_acumulada'].iloc[-1], 1.0, atol=1e-6)
+    assert tab['variancia_individual'].ge(0).all()
 
 
 def test_pca11_sem_pc3_mostra_somente_marcas_existentes(tmp_path):

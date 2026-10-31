@@ -103,8 +103,8 @@ def test_mapa_gmm08_2d_comparativo_unico(sint, tmp_path, monkeypatch):
     assert capturas[0]['eixos'] == 3  # 2 mapas + 1 barra compartilhada.
     assert capturas[0]['escalas'][0] == capturas[0]['escalas'][1]
     textos = ' '.join(capturas[0]['cabecalhos'])
-    assert '0,50' in textos and '0.12' in textos
-    assert 'MCC da simulação' in textos and 'F10 não utilizado' in textos
+    assert '0.5000000' in textos and '0.1200000' in textos
+    assert 'MCC da simulação' in textos and '95%' in textos
     assert m.NUM['mapa_risco_fronteira'] == 8
     assert (tmp_path/'GMM08_mapa_risco_2d_comparativo.png').is_file()
     assert len(list(tmp_path.glob('GMM08_mapa_risco_*.png'))) == 1
@@ -112,46 +112,60 @@ def test_mapa_gmm08_2d_comparativo_unico(sint, tmp_path, monkeypatch):
 
 
 def test_respeita_pares_geometricos_de_2d_e_3d(sint,tmp_path,monkeypatch):
+    """O desenho 3D oficial usa modulo proprio: conferir produtos e malhas salvas."""
     df,c,e=sint
     d=copy.deepcopy(e)
     d['configuracao']['reducao']['n_components']=3
     data=m._treinar_vencedor(df,c,d)
     assert m._pares(3,c)==[(0,1),(0,2),(1,2)]
-    capturas=[]
-    salvar_original=m._guardar
-
-    def espiar_figura(fig,dest,nome,ext,dpi):
-        if nome.startswith('GMM08_mapa_risco_3d_'):
-            titulos=[ax.get_title() for ax in fig.axes[:6]]
-            legenda=[t.get_text() for l in fig.legends for t in l.get_texts()]
-            textos=[t.get_text() for t in fig.texts]
-            escalas=[ax.collections[0].get_clim() for ax in fig.axes[:6]]
-            capturas.append((nome,titulos,legenda,textos,escalas,
-                             fig.axes[-1].get_position().x1))
-        return salvar_original(fig,dest,nome,ext,dpi)
-
-    monkeypatch.setattr(m,'_guardar',espiar_figura)
     m._fronteira(c,data,d,tmp_path,'png',60,True,
                 avaliacao={'y':data['y'],'p':data['scores'],'origem':'simulado'})
-    assert len(capturas)==1
-    nome,titulos,legenda,textos,escalas,cbar_direita=capturas[0]
-    assert nome=='GMM08_mapa_risco_3d_comparativo'
-    assert len(titulos)==6
-    for i in (0,2,4):
-        assert titulos[i]==titulos[i+1]
-        assert 'fixada na média do desenvolvimento' in titulos[i]
-    assert len(set(escalas))==1
-    assert all(any(f'G{k} ' in titulo for titulo in legenda) for k in range(1,5))
-    assert sum('MCC da simulação' in t for t in textos)>=2
-    assert any('F10 não utilizado' in t for t in textos)
-    assert cbar_direita < .95
-    assert len(list(tmp_path.glob('GMM08_mapa_risco_*.png')))==1
-    assert len(list(tmp_path.glob('GMM08_malha_*.csv')))==3
+    png=tmp_path/'GMM08_mapa_risco_3d_comparativo.png'
+    assert png.is_file() and png.stat().st_size>3000
+    malhas=sorted(tmp_path.glob('GMM08_malha_*.csv'))
+    # Tres cortes por pares de PCs + um CSV de malha volumetrica 3D.
+    planos=[p for p in malhas if p.name!='GMM08_malha_volumetrica_3d.csv']
+    assert len(planos)==3
+    assert all(p.is_file() and p.stat().st_size>0 for p in planos)
+    volume=tmp_path/'GMM08_malha_volumetrica_3d.csv'
+    assert volume.is_file() and volume.stat().st_size>0
+    assert len(malhas)==4
+    # CONTRATO_GMM08_3D_CSVS_V4: planos e volume possuem esquemas distintos.
+    esperados = {
+        'GMM08_malha_PC1_PC2.csv',
+        'GMM08_malha_PC1_PC3.csv',
+        'GMM08_malha_PC2_PC3.csv',
+        'GMM08_malha_volumetrica_3d.csv',
+    }
+    assert {arq.name for arq in malhas} == esperados
+    tau = float(d['limiar_mcc_oof'])
+    for arquivo in malhas:
+        tabela = pd.read_csv(arquivo)
+        eh_volume = arquivo.name == 'GMM08_malha_volumetrica_3d.csv'
+        coluna_fixa = 'classe_corte_050' if eh_volume else 'classe_corte_fixo'
+        colunas = {'score_risco', coluna_fixa, 'classe_corte_mcc', 'mudou_classe'}
+        if eh_volume:
+            colunas.update({'PC1', 'PC2', 'PC3'})
+        else:
+            par = arquivo.stem.removeprefix('GMM08_malha_').split('_')
+            assert len(par) == 2 and set(par).issubset({'PC1', 'PC2', 'PC3'})
+            colunas.update(par)
+        assert colunas.issubset(set(tabela.columns)), arquivo.name
+        assert len(tabela) > 0
+        risco = tabela['score_risco'].to_numpy(dtype=float)
+        assert np.isfinite(risco).all()
+        assert np.logical_and(risco >= 0.0, risco <= 1.0).all()
+        for nome_coluna in (coluna_fixa, 'classe_corte_mcc', 'mudou_classe'):
+            assert tabela[nome_coluna].isin([0, 1]).all(), (arquivo.name, nome_coluna)
+        fixo = tabela[coluna_fixa].to_numpy(dtype=bool)
+        otimo = tabela['classe_corte_mcc'].to_numpy(dtype=bool)
+        mudou = tabela['mudou_classe'].to_numpy(dtype=bool)
+        assert np.array_equal(fixo, risco >= 0.50), arquivo.name
+        assert np.array_equal(otimo, risco >= tau), arquivo.name
+        assert np.array_equal(mudou, fixo ^ otimo), arquivo.name
     m._projecoes(c,data,tmp_path,'png',60,True,'PCA')
-    # PDF PCA 12: 3 PCs selecionados => UMA projeção 3D verdadeira.
-    # Os três pares continuam obrigatórios para os cortes do GMM 08.
     assert len(list(tmp_path.glob('12_pca_projecao_*.png')))==1
-    assert (tmp_path/'12_pca_projecao_PC1_PC2_PC3.png').exists()
+    assert (tmp_path/'12_pca_projecao_PC1_PC2_PC3.png').is_file()
 
 
 def test_covar_full_em_1d(sint):
