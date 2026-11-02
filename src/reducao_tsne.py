@@ -137,10 +137,25 @@ class RedutorTSNE:
             early_exaggeration=float(p["early_exaggeration"]),
             n_iter=int(p["n_iter"]),
             theta=float(p["theta"]),
+            # FFT do openTSNE 1.0.4 não suporta coordenadas 3D.
+            negative_gradient_method=(
+                "bh" if int(p["n_components"]) == 3 else "auto"
+            ),
             random_state=int(self.config["experimento"]["semente"]),
             n_jobs=int(self.config.get("execucao", {}).get("n_jobs", 1)),
         )
         embedding = modelo.fit(X_np)
+
+        # openTSNE 1.0.4 recentraliza o proprio embedding durante transform().
+        # Centralizar antes do cache garante o mesmo referencial do GMM no
+        # treino e na inferencia OOS, sem alterar distancias entre pontos.
+        # O embedding real e um ndarray; mocks dos testes podem nao ser.
+        if isinstance(embedding, np.ndarray):
+            centro = (
+                np.max(embedding, axis=0) + np.min(embedding, axis=0)
+            ) / 2.0
+            embedding -= centro
+
         coords = np.asarray(embedding, dtype=np.float32)
         formato = (len(X), int(p["n_components"]))
         if coords.shape != formato or not np.isfinite(coords).all():
