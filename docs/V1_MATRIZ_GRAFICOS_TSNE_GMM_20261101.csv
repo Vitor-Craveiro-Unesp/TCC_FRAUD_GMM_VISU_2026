@@ -1,0 +1,18 @@
+﻿fase;numero;chave;prefixo_saida;fonte_codigo;classe;nota_v1
+OOF;00;painel_score_composto;00_painel_score_composto;src/visualizacao_oof.py;compartilhado;"Reuso; teste visual t-SNE pendente"
+OOF;01;curva_pr;01_curva_precision_recall;src/visualizacao_oof.py;compartilhado;"Reuso; teste visual t-SNE pendente"
+OOF;02;curva_mcc;02_mcc_por_limiar;src/visualizacao_oof.py;compartilhado;"Reuso; teste visual t-SNE pendente"
+OOF;03;matriz_confusao_05;03_matriz_confusao_05;src/visualizacao_oof.py;compartilhado;"Reuso; teste visual t-SNE pendente"
+OOF;04;matriz_confusao_mcc;04_matriz_confusao_mcc;src/visualizacao_oof.py;compartilhado;"Reuso; teste visual t-SNE pendente"
+OOF;05;distribuicao_probabilidades;05_distribuicao_probabilidades;src/visualizacao_oof.py;compartilhado;"Reuso; teste visual t-SNE pendente"
+OOF;06;comparacao_hiperparametros;06_comparacao_hiperparametros;src/visualizacao_oof.py;compartilhado;"Rótulo TSNE existente; validar"
+OOF;07;metricas_por_fold;07_metricas_por_fold;src/visualizacao_oof.py;compartilhado;"Reuso; teste visual t-SNE pendente"
+GEOMETRIA;GMM01;densidades_marginais;GMM01_*;"src/visualizacao_gmm01.py; src/visualizacao_gmm01_3d.py";compartilhado;2D e 3D com códigos PCA específicos
+GEOMETRIA;GMM04;regioes_dominancia;GMM04_*;"src/visualizacao_gmm04.py; src/visualizacao_gmm04_3d.py";compartilhado;HTML 3D com rótulos PCA
+GEOMETRIA;GMM07;sensibilidade_fronteira;GMM07_*;"src/visualizacao_gmm07.py; src/visualizacao_gmm07_3d.py";compartilhado;HTML 3D com rótulos PCA
+GEOMETRIA;GMM08;mapa_risco_fronteira;GMM08_*;"src/visualizacao_geometrica.py; src/visualizacao_gmm08_3d.py";compartilhado;Roteador 3D exige PC1–PC3
+GEOMETRIA;09;painel_parametros_gaussianos;09_painel_parametros_gaussianos;src/visualizacao_geometrica.py;compartilhado;Validar texto de espaço do embedding
+GEOMETRIA;GMM18;convergencia_em;GMM18_convergencia_em_inicializacoes;src/visualizacao_gmm18.py;compartilhado;Convergência GMM e não TSNE
+GEOMETRIA;TSNE02;tsne_trustworthiness;TSNE02_trustworthiness_vs_perplexity;src/visualizacao_tsne_pdf.py;exclusivo TSNE;Requer reajustes auxiliares em amostra F1–F9
+GEOMETRIA;TSNE13;tsne_mapa;13_tsne_mapa_*;"src/visualizacao_geometrica.py; src/visualizacao_tsne_pdf.py";exclusivo TSNE;1D histograma, 2D mapa, 3D projeção
+GEOMETRIA;TSNE14;tsne_diagnostico;14_tsne_diagnostico;src/visualizacao_tsne_pdf.py;exclusivo TSNE;"KL final/tempo; histórico KL indisponível"
