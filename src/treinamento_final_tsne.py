@@ -176,7 +176,9 @@ def salvar_pacote(pacote: PacoteFinalTSNE, pasta_nova: str | Path) -> tuple[Path
     pasta.mkdir(parents=True, exist_ok=False)
     modelo = pasta / "modelo_final_f1_f9.joblib"
     manifesto = pasta / "manifesto_modelo_final.json"
-    joblib.dump(pacote, modelo, compress=3)
+    from src.compatibilidade_opentsne_windows import pickle_opentsne_annoy_windows
+    with pickle_opentsne_annoy_windows():
+        joblib.dump(pacote, modelo, compress=3)
     resumo = {
         "versao": pacote.versao,
         "tipo": "TREINAMENTO_FINAL_TSNE_F1_F9",
@@ -204,7 +206,9 @@ def carregar_pacote_confiavel(pasta: str | Path) -> PacoteFinalTSNE:
             or manifesto.get("teste_f10_executado") is not False
             or _sha256_arquivo(modelo) != manifesto.get("sha256_modelo_final")):
         raise RuntimeError("Manifesto ou hash do modelo final TSNE incompativel.")
-    pacote = joblib.load(modelo)
+    from src.compatibilidade_opentsne_windows import pickle_opentsne_annoy_windows
+    with pickle_opentsne_annoy_windows():
+        pacote = joblib.load(modelo)
     if not isinstance(pacote, PacoteFinalTSNE) or pacote.versao != VERSAO_PACOTE:
         raise RuntimeError("Objeto final TSNE desserializado incompativel.")
     return pacote
