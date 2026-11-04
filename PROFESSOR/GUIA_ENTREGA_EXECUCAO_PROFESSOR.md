@@ -86,7 +86,7 @@ tail -n 50 outputs/logs/tcc_ID.err
 
 Para cancelar um job, o professor usa `scancel ID`, apos conferir o numero do job.
 
-**Retomar:** apenas com o snapshot original e pasta em andamento, quando a configuracao original havia habilitado `usar_cache=true` e `retomar=true`. Consultar `docs/EXECUCAO_YAML_WINDOWS_CLUSTER.md`; nao basta repetir `executar`.
+**Retomar:** apenas com o snapshot original e pasta em andamento, quando a configuracao original havia habilitado `usar_cache=true` e `retomar=true`. Consultar `PROFESSOR/EXECUCAO_YAML_WINDOWS_CLUSTER.md`; nao basta repetir `executar`.
 
 ## 6. O que o YAML controla
 
