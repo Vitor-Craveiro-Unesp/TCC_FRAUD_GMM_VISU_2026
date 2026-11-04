@@ -119,15 +119,6 @@ def _amostra_estratificada(y: np.ndarray, *, max_pontos: int, semente: int) -> n
 
 
 def _figura_html(z, y, p, tau, gamma, ids, *, origem, fracao_f10, tipo_id):
-    if origem == 'f10':
-        descricao = (f'F10 exploratorio (fold reservado, {fracao_f10:.2%} do proprio F10). '
-                     'Modelo e limiar definidos em F1-F9; sem reotimizacao em F10.')
-    elif origem == 'simulado':
-        descricao = 'PREVIA SINTETICA — nao representa dados reais nem resultados do TCC.'
-    else:
-        descricao = 'Desenvolvimento F1-F9 — F10 nao utilizado.'
-    anotacao = ('Rotacao, zoom e inspecao sao descritivos. '
-                'Nao superinterpretar distancias globais do t-SNE.')
     fig = go.Figure()
     modos: list[tuple[str, list[int]]] = []
     estilo = {0: ('Legitimas', '#1f77b4'), 1: ('Fraudes', '#d62728')}
@@ -210,21 +201,17 @@ def _figura_html(z, y, p, tau, gamma, ids, *, origem, fracao_f10, tipo_id):
     for nome, tracos in modos:
         vis = [i in tracos for i in range(len(fig.data))]
         buttons.append(dict(label=nome, method='update',
-                            args=[{'visible': vis}, {'title': 'TSNE13 — t-SNE 3D | ' + nome}]))
+                            args=[{'visible': vis}, {'title': 't-SNE 3D | ' + nome}]))
 
     fig.update_layout(
-        title='TSNE13 — t-SNE 3D | Classe real',
+        title='t-SNE 3D | Classe real',
         template='plotly_white',
         scene=dict(xaxis_title='TSNE1', yaxis_title='TSNE2', zaxis_title='TSNE3',
                    aspectmode='data', bgcolor='rgba(245,248,252,1)'),
         legend=dict(orientation='h', y=-.05),
-        height=780, margin=dict(l=0, r=0, t=95, b=145),
+        height=780, margin=dict(l=0, r=0, t=95, b=75),
         updatemenus=[dict(type='dropdown', direction='down', active=0, showactive=True,
                           x=.01, y=1.115, xanchor='left', buttons=buttons)],
-        annotations=[dict(text=descricao + '<br>' + anotacao,
-                          x=.5, y=-.12, xref='paper', yref='paper',
-                          xanchor='center', showarrow=False, align='center',
-                          font=dict(size=11, color='#475569'))],
     )
     return fig, [m[0] for m in modos]
 
@@ -242,15 +229,9 @@ def _figura_png(z, y, *, origem, n_total, dpi):
     ax.set(xlabel='TSNE1', ylabel='TSNE2', zlabel='TSNE3')
     ax.view_init(elev=22, azim=-59)
     ax.legend(loc='upper left', fontsize=9)
-    fig.suptitle('TSNE13 — Projecao tridimensional t-SNE1 x t-SNE2 x t-SNE3',
+    fig.suptitle('Projecao tridimensional t-SNE1 x t-SNE2 x t-SNE3',
                  fontsize=15, y=.96)
-    aviso = {'f10': 'F10 exploratorio — modelo congelado em F1–F9',
-             'desenvolvimento': 'Desenvolvimento F1–F9 — sem F10',
-             'simulado': 'PREVIA SINTETICA — sem dados reais'}[origem]
-    fig.text(.5, .035, f'{aviso} | {len(y):,} de {n_total:,} pontos exibidos | '
-             'Nao interpretar distancias globais literalmente.',
-             ha='center', fontsize=9, color='#475569')
-    fig.subplots_adjust(top=.9, bottom=.09)
+    fig.subplots_adjust(top=.9, bottom=.055)
     return fig
 
 

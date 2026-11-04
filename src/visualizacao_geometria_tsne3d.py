@@ -156,7 +156,7 @@ def _densidade(X,modelo,centro,secoes,malha,destino,dpi,rotulo_origem):
         img=ax[a].pcolormesh(xx,yy,den,cmap='viridis',shading='auto',rasterized=True)
         ax[a].set(xlabel=EIXOS[i],ylabel=EIXOS[j],title=f'{EIXOS[om]} fixada na media dos dados')
         f.colorbar(img,ax=ax[a],shrink=.75)
-    f.suptitle('GMM01 — Cortes da densidade conjunta FULL em t-SNE 3D\n'+rotulo_origem,fontweight='bold')
+    f.suptitle('Cortes da densidade conjunta FULL em t-SNE 3D\n'+rotulo_origem,fontweight='bold')
     png=destino/NOMES['GMM01'][0]
     f.savefig(png,dpi=dpi);plt.close(f)
     pts,scores,dens,resp=malha
@@ -171,7 +171,7 @@ def _densidade(X,modelo,centro,secoes,malha,destino,dpi,rotulo_origem):
         fig.add_trace(go.Surface(x=x,y=y,z=z,showscale=False,opacity=.15,
             surfacecolor=np.full_like(x,k),colorscale=[[0,CORES[k]],[1,CORES[k]]],
             name=f'G{k+1} FULL 95%'))
-    _html(fig,'GMM01 — Densidade conjunta t-SNE 3D',
+    _html(fig,'Densidade conjunta t-SNE 3D',
           rotulo_origem+' | Elipsoides 95% indicam concentracao gaussiana, nao risco de fraude',
           destino/NOMES['GMM01'][1])
 
@@ -185,7 +185,7 @@ def _dominancia(X,y,modelo,secoes,destino,dpi,rotulo_origem):
     ax.scatter(X[idx,0],X[idx,1],X[idx,2],c=[CORES[z] for z in domin[idx]],s=7,alpha=.4,depthshade=False)
     for k,mu in enumerate(modelo.means_):
         ax.scatter(*mu,marker='X',s=100,color=CORES[k],label=f'G{k+1}')
-    ax.set(xlabel='TSNE1',ylabel='TSNE2',zlabel='TSNE3',title='GMM04 — Dominancia por responsabilidade\n'+rotulo_origem)
+    ax.set(xlabel='TSNE1',ylabel='TSNE2',zlabel='TSNE3',title='Dominancia por responsabilidade\n'+rotulo_origem)
     ax.legend(loc='upper left')
     png=destino/NOMES['GMM04'][0]
     fig.savefig(png,dpi=dpi);plt.close(fig)
@@ -201,14 +201,14 @@ def _dominancia(X,y,modelo,secoes,destino,dpi,rotulo_origem):
         fig.add_trace(go.Scatter3d(x=[mu[0]],y=[mu[1]],z=[mu[2]],mode='markers+text',
             text=[f'G{k+1}'],marker=dict(color=CORES[k],symbol='diamond',size=7),
             name=f'Centro G{k+1}'))
-    _html(fig,'GMM04 — Dominancia t-SNE 3D',
+    _html(fig,'Dominancia t-SNE 3D',
           rotulo_origem+' | Cor por responsabilidade posterior maxima, nao por risco de fraude',
           destino/NOMES['GMM04'][1])
 
 
 def _painel_fronteiras(X,y,modelo,sec,tau,mccfix,mccstar,rotulo_origem,destino,dpi,com_geometria):
     """Tres planos ortogonais; duas colunas para 0.50 e tau* OOF."""
-    titulo='GMM08 — Mapa de risco e geometria FULL 95%' if com_geometria else 'GMM07 — Sensibilidade ao limiar'
+    titulo='Mapa de risco e geometria FULL 95%' if com_geometria else 'Sensibilidade ao limiar'
     key='GMM08' if com_geometria else 'GMM07'
     fig, axs=plt.subplots(3,2,figsize=(13.5,17),layout='constrained')
     teto=max(float(np.max(item[6])) for item in sec)
@@ -241,7 +241,8 @@ def _painel_fronteiras(X,y,modelo,sec,tau,mccfix,mccstar,rotulo_origem,destino,d
                   transform=axs[0,0].transAxes,fontsize=11.3,fontweight='bold')
     axs[0,1].text(0,1.21,f'CORTE OTIMO: τ*={tau:.7f} | MCC={mccstar:.7f}',
                   transform=axs[0,1].transAxes,fontsize=11.3,fontweight='bold')
-    fig.suptitle(titulo+' — '+rotulo_origem,fontweight='bold')
+    if not com_geometria:
+        fig.suptitle(titulo+' — '+rotulo_origem,fontweight='bold')
     fig.colorbar(plt.cm.ScalarMappable(norm=norm,cmap='viridis'),ax=axs,shrink=.65,label='Risco s(x), escala comum')
     png=destino/NOMES[key][0]
     fig.savefig(png,dpi=dpi);plt.close(fig)
@@ -289,7 +290,7 @@ def _html_fronteiras(X,y,modelo,malha,tau,mccfix,mccstar,rotulo_origem,destino,c
             fig.add_trace(go.Scatter3d(x=X[ids,0],y=X[ids,1],z=X[ids,2],mode='markers',
                 marker=dict(color=c,opacity=.35,size=2.5),name=txt,
                 showlegend=(col==1)),row=1,col=col)
-    titulo='GMM08 — Mapa de risco e geometria t-SNE 3D' if com_geometria else 'GMM07 — Sensibilidade t-SNE 3D'
+    titulo='Mapa de risco e geometria t-SNE 3D' if com_geometria else 'GMM07 — Sensibilidade t-SNE 3D'
     fig.update_layout(title={'text':titulo+'<br><sup>'+rotulo_origem+
         ' | Mesma superficie de risco; limiares congelados do OOF</sup>','x':.5},
         height=750,margin=dict(l=5,r=5,t=135,b=5),paper_bgcolor='white',

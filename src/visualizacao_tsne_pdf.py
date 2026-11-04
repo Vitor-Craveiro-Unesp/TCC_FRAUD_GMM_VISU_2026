@@ -102,20 +102,14 @@ def projecao_3d(config, data, dest, ext, dpi, csv, op, *, origem='desenvolviment
     ax.view_init(elev=23, azim=-59)
     if colorir != 'risco':
         ax.legend(loc='upper left', fontsize=8)
-    titulo = '13 — t-SNE 3D | Projecao t-SNE 1 × t-SNE 2 × t-SNE 3'
+    titulo = 't-SNE 3D | Projecao t-SNE 1 × t-SNE 2 × t-SNE 3'
     fig.suptitle(titulo, fontsize=14, y=.965)
     fig.text(.5, .927,
              f"n_components=3 | perplexity={par.get('perplexity', 'n/d')} | "
              f"métrica={par.get('metric', 'n/d')} | random_state="
              f"{config['experimento']['semente']}",
              fontsize=9, ha='center', color='#374151')
-    origem_txt = ('PRÉVIA SINTÉTICA' if origem == 'simulado' else
-                  'Desenvolvimento F1–F9')
-    fig.text(.5, .044, f'{origem_txt}; F10 não utilizado. '
-             'Leitura local: não superinterpretar distâncias globais do t-SNE. '
-             f'{len(indices)} pontos exibidos de {n}.',
-             fontsize=8, ha='center', color='#475569')
-    fig.subplots_adjust(left=.02, right=.95, top=.88, bottom=.09)
+    fig.subplots_adjust(left=.02, right=.95, top=.88, bottom=.055)
     nome = '13_tsne_mapa_TSNE1_TSNE2_TSNE3'
     geo._guardar(fig, dest, nome, ext, dpi)
     if csv:

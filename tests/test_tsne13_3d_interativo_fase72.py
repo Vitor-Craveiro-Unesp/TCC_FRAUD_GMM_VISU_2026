@@ -48,7 +48,8 @@ def test_render_sintetico_offline_modos_manifesto(tmp_path):
     assert set(saida) == {PNG,HTML,CSV,MANIFESTO}
     assert (tmp_path/PNG).read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
     pagina=(tmp_path/HTML).read_text(encoding='utf-8')
-    assert 'scatter3d' in pagina and 'Plotly.newPlot' in pagina and 'PREVIA SINTETICA' in pagina
+    assert 'scatter3d' in pagina and 'Plotly.newPlot' in pagina
+    assert 'PREVIA SINTETICA' not in pagina
     assert not re.search(r'<script[^>]+\bsrc\s*=', pagina, flags=re.IGNORECASE)
     assert 'Gaussiana dominante' in pagina and 'Risco estimado' in pagina
     assert 'Predicao tau* OOF' in pagina and 'TSNE3' in pagina
@@ -56,6 +57,7 @@ def test_render_sintetico_offline_modos_manifesto(tmp_path):
     assert len(tabela)==50 and tabela['classe_real'].sum()==8
     assert tabela['linha_original'].min() >= 500
     man=json.loads((tmp_path/MANIFESTO).read_text(encoding='utf-8'))
+    assert man['origem']=='simulado'
     assert man['n_exibidos']==50 and man['n_fraudes_exibidas']==8
     assert man['modelo_retreinado'] is False
     for nome, digest in man['sha256_arquivos'].items():
@@ -68,9 +70,11 @@ def test_f10_exige_fracao_e_nao_reajusta(tmp_path):
         gerar_tsne13_3d(z,y,tmp_path,scores=p,origem='f10',dpi=80)
     saida=gerar_tsne13_3d(z,y,tmp_path,scores=p,origem='f10',
                           fracao_f10=.1,dpi=80)
-    assert '10.00%' in saida[HTML].read_text(encoding='utf-8')
-    assert 'F10 exploratorio' in saida[HTML].read_text(encoding='utf-8')
+    pagina=saida[HTML].read_text(encoding='utf-8')
+    assert '10.00%' not in pagina
+    assert 'F10 exploratorio' not in pagina
     m=json.loads(saida[MANIFESTO].read_text(encoding='utf-8'))
+    assert m['origem']=='f10'
     assert m['f10_exploratorio'] and m['fracao_f10_dentro_do_fold']==.1
     assert m['limiar_oof_congelado'] is None
 

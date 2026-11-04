@@ -1662,9 +1662,6 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
                  f'{gm.modelo_.covariance_type.upper()} | 2D',
                  ha='center', fontsize=11, color='#5a6c84')
     else:
-        fig.suptitle(f'GMM 08 — Mapa de risco e geometria 95% | '
-                     f'{gm.modelo_.covariance_type.upper()} | {dim}D',
-                     fontsize=16, fontweight='bold', y=.984)
         fig.text(.265, .937,
                  f'Limiar fixo τ=0,50  |  {nome_mcc}={mcc_fixo:.5f}',
                  ha='center', fontsize=12, weight='bold', color='#23334a')
@@ -1707,19 +1704,6 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
 
 
 
-    if dim == 3:
-        # Preservar os rodapes da visualizacao 3D.
-        direcao = ('Legítima → fraude' if tau_star < .5 else
-                   'Fraude → legítima' if tau_star > .5 else 'Nenhuma mudança')
-        fig.text(.49, .075, f'Hachura amarela: mudança de classe ({direcao}); '
-                 'mesma superfície de risco nos dois limiares.',
-                 fontsize=9.4, ha='center', color='#23334a', weight='bold')
-        fig.text(.49, .050, f'{nota_mcc}. '
-                 'Os planos 3D fixam a coordenada omitida na média de F1–F9.',
-                 fontsize=8.5, ha='center', color='#4a5970')
-        fig.text(.49, .027, 'Elipses tracejadas: seções de gaussianas FULL 95%, '
-                 'não regiões classificadas como fraude. F10 não utilizado.',
-                 fontsize=8.2, ha='center', color='#4a5970')
 
     # RODAPE_RESTAURADO_PCA2D_GMM08
     if dim == 2:

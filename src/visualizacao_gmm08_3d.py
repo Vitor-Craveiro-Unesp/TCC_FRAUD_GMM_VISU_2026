@@ -107,8 +107,6 @@ def png_organizado(config, data, escolha, avaliacao, destino, ext, dpi):
                          f'PC{faltando+1} = {media[faltando]:.7f}',
                          fontsize=10,pad=9)
             ax.grid(alpha=.08)
-    fig.text(.5,.983,'MAPA DE RISCO E GEOMETRIA GAUSSIANA (95%)',
-             ha='center',va='top',fontsize=19,fontweight='bold',color='#14243b')
     origem_mcc, nota_mcc = _origem_mcc(avaliacao)
     fig.text(.5,.943,f'PCA 3D  |  GMM FULL  |  K = {data["gmm"].modelo_.n_components}  |  {nota_mcc}',
              ha='center',fontsize=10.6,color='#657990')
