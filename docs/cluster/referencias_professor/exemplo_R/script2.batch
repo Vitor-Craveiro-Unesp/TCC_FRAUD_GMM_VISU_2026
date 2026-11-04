@@ -1,0 +1,27 @@
+#!/bin/bash
+
+
+#SBATCH -J code_pogamp10
+#SBATCH -D /home/guilherme/code_pogamp10
+#SBATCH -A guilherme
+
+#SBATCH -p turtle
+
+
+#SBATCH -N 1
+
+#SBATCH -n 1
+
+#SBATCH -c 1
+
+
+#SBATCH --no-requeue
+
+
+#SBATCH --error=job.%J.err 
+
+#SBATCH --output=job.%J.out 
+
+
+srun R CMD BATCH --quiet code_pogamp10.R 
+
