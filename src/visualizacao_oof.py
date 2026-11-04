@@ -148,6 +148,9 @@ def _figura(config, *, escala=1.0):
 
 
 def _salvar(fig, destino, *, dpi):
+    # TCC_LAYOUT_2D_LIMPO_PERMANENTE_V1
+    from src.layout_limpo_2d import limpar as _limpar_layout_2d
+    _limpar_layout_2d(fig, destino)
     destino.parent.mkdir(parents=True, exist_ok=True)
     if destino.exists():
         plt.close(fig)

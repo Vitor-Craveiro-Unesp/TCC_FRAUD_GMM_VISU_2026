@@ -296,6 +296,15 @@ def _verificar_geracoes(experimento,config,escolha,*,executar):
                 for nome in adicionais_2d
             )
 
+        # V2_TCC_TSNE_2D_COMPAT_20261103 | validar densidades conjuntas TSNE2D
+        if (metodo == 'TSNE' and dim == 2 and 'densidades_marginais' in esperado_geo):
+            adicionais_tsne_2d = (
+                'GMM01_densidade_conjunta_2d_TSNE1_TSNE2',
+                'GMM01_densidade_conjunta_superficie_TSNE2D',
+            )
+            imagens_geo = imagens_geo and all(
+                (geo_dir / f'{nome}{ext}').is_file() for nome in adicionais_tsne_2d
+            )
         # PCA3D_GMM01_GALERIA_V1: verificar os cinco anexos GMM01.
         if (escolha['configuracao']['metodo'].upper() == 'PCA'
                 and int(escolha['configuracao']['reducao']['n_components']) == 3
@@ -532,19 +541,18 @@ def integrar(experimento, *, planejar=False, complementar_2d=True):
                         f'GMM01_densidade_marginal_{dim}d_'
                     )
 
-                    # Adicionar as duas representacoes conjuntas PCA 2D.
-                    if (
-                        dim == 2
-                        and escolha['configuracao']['metodo'].upper() == 'PCA'
-                    ):
-
-                        conjuntas_2d = {
-                            'GMM01_densidade_conjunta_2d_PC1_PC2',
-                            'GMM01_densidade_conjunta_superficie_PCA2D'
-                        }
-
-                        if arq.stem in conjuntas_2d:
-                            permitido = True
+                    # V2_TCC_TSNE_2D_COMPAT_20261103 | conjunta 2D PCA ou TSNE
+                    if dim == 2:
+                        metodo_2d = escolha['configuracao']['metodo'].upper()
+                        eixos_2d = {'PCA': ('PC1','PC2'),
+                                   'TSNE': ('TSNE1','TSNE2')}.get(metodo_2d)
+                        if eixos_2d is not None:
+                            conjuntas_2d = {
+                                f'GMM01_densidade_conjunta_2d_{eixos_2d[0]}_{eixos_2d[1]}',
+                                f'GMM01_densidade_conjunta_superficie_{metodo_2d}2D'
+                            }
+                            if arq.stem in conjuntas_2d:
+                                permitido = True
 
 
 

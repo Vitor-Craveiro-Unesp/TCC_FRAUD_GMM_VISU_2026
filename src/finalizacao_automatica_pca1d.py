@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Finalizacao automatica PCA1D para o CLI original `python -m src.orquestracao_oof --executar`.
 
-Somente PCA 1D, K4, n_init5, RUS16, fracao desenvolvimento 10% e F10 10%.
+PCA 1D, K4, n_init5, RUS16; desenvolvimento em 1%, 3% ou 10%; F10 controlado pelo YAML.
 F10 foi previamente acessado neste projeto: execucoes repetidas sao EXPLORATORIAS.
 Nunca utiliza F10 para escolher candidato, ajustar PCA/GMM ou otimizar tau.
 Nao e uma CLI; chamada exclusivamente pelo orquestrador original apos OOF + galeria.
@@ -12,6 +12,7 @@ import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from hashlib import sha256
+from src.amostragem_f10 import fracao_amostra_f10, selecionar_f10_estratificado
 import importlib
 import json
 import os
@@ -57,7 +58,8 @@ def salvar_json_novo(path, obj):
 
 def parametros_ok(c):
     unico = lambda a: a[0] if isinstance(a, list) and len(a)==1 else a
-    return (float(c['dados']['fracao_base']) == 0.1
+    fracao_amostra_f10(c)
+    return (float(c['dados']['fracao_base']) in (0.01, 0.03, 0.1)
             and c['reducao']['metodo'].upper() == 'PCA'
             and int(unico(c['gmm']['n_components'])) == 4
             and int(c['gmm']['n_init']) == 5
@@ -91,9 +93,9 @@ def conferir_oof(folder):
     m = ler_json(folder/'manifesto.json')
     esc = ler_json(folder/'vencedor/metricas/melhor_configuracao.json')
     c = yaml.safe_load((folder/'configuracao.yaml').read_text(encoding='utf-8-sig'))
-    exigir(parametros_ok(c) and c['pca']['n_components']==[1], 'OOF nao corresponde a PCA1D K4 .1.')
+    exigir(parametros_ok(c) and c['pca']['n_components']==[1], 'OOF nao corresponde a PCA1D K4 nas fracoes 1%, 3% ou 10%.')
     exigir(m.get('status')=='concluido_06_03' and int(m.get('registros_desenvolvimento',-1))>0,
-           'OOF nao concluido com 166716 registros.')
+           'OOF nao concluido ou sem registros de desenvolvimento.')
     exigir(esc['configuracao']['reducao']['n_components']==1
            and esc['configuracao']['gmm']['n_init']==5
            and esc['configuracao']['gmm']['n_components']==4
@@ -209,7 +211,8 @@ def avaliar_f10(folder, state, pacote, ids):
     exigir(not (dest/'predicoes_f10.csv').exists() and not (dest/'metricas_f10.json').exists(),
            'F10 desta nova execucao ja foi salvo. Nao repetir.')
     exigir(np.all(state['orig_folds'][ids]==10),'Amostra inclui indices que nao sao F10.')
-    print(f'[F10] Avaliacao EXPLORATORIA em {len(ids)} linhas F10 (fold 10; seed 42; 10% estratificado).',flush=True)
+    frac = fracao_amostra_f10(state['config'])
+    print(f'[F10] Avaliacao EXPLORATORIA em {len(ids)} linhas F10 (fold 10; seed 42; {frac:.2%} estratificado).',flush=True)
     df=ler_linhas_f10(state['parquet'],ids)
     tab,metricas=avaliar_f10_em_memoria(pacote,df,state['orig_folds'][ids],ids)
     exigir(metricas['limiar_otimizado_no_f10'] is False
@@ -220,7 +223,7 @@ def avaliar_f10(folder, state, pacote, ids):
         tab.to_csv(f,index=False,float_format='%.17g')
     salvar_json_novo(dest/'metricas_f10.json',metricas)
     np.save(dest/'indices_f10_amostra.npy',ids,allow_pickle=False)
-    salvar_json_novo(dest/'manifesto_amostra_f10.json', {'fracao':0.1,'semente':42,'n':len(ids),
+    salvar_json_novo(dest/'manifesto_amostra_f10.json', {'fracao':frac,'semente':42,'n':len(ids),
         'sha256_indices':sha256(ids.tobytes()).hexdigest(),
         'origem':'F10 da base/folds congelados do proprio experimento',
         'classe':'AMOSTRAL_EXPLORATORIO_REPETIDO',
@@ -253,7 +256,7 @@ def preparar_geometria(folder,state,pacote,df,ids):
 
 
 @contextmanager
-def rotulos_graficos_f10(figs=True):
+def rotulos_graficos_f10(config, figs=True):
     from src import visualizacao_oof as vo
     from matplotlib.text import Text
     old_save=vo._salvar
@@ -264,7 +267,7 @@ def rotulos_graficos_f10(figs=True):
         ('AP calculada sobre as predições OOF.','AP calculada sobre as predições F10.'),
         ('MCC calculado no limiar ótimo das predições OOF.','MCC calculado em F10 no limiar τ* OOF.'),
         ('LogLoss calculado sobre as predições OOF.','LogLoss calculado sobre as predições F10.'),
-        ('OOF F1–F9','F10 estratificado 10%'),
+        ('OOF F1–F9',f'F10 estratificado {fracao_amostra_f10(config):.2%}'),
         ('F10 não utilizado','F10 exploratório repetido'),
         ('Limiar ótimo do MCC (τ*)','Limiar τ* congelado em OOF'),
         ('Limiar ótimo (τ*)','Limiar τ* OOF (fixo)'),
@@ -303,7 +306,7 @@ def desenhar_preditivos(folder,state,tab,met):
     vencedor=pd.Series({'ap':met['ap'],'mcc':met['mcc_limiar_oof'],
                        'logloss':met['logloss'],'score':met['score_composto_limiar_oof']})
     dpi=int(cfg['visualizacao']['padrao'].get('dpi',180))
-    with rotulos_graficos_f10():
+    with rotulos_graficos_f10(cfg):
         funcs=[
             ('00_painel_score_composto',lambda:vo._plot_painel_00(cfg,y,p,vencedor,e,fig,'png',dpi,True)),
             ('01_curva_precision_recall',lambda:vo._plot_pr(cfg,y,p,vencedor,e,fig,'png',dpi,True)),
@@ -459,7 +462,7 @@ def galeria_final(folder,ids,pacote,met):
 <title>Teste completo PCA 1D — F10 exploratorio</title><style>body{{font:15px system-ui,sans-serif;background:#f5f7fa;color:#172236;max-width:1400px;margin:auto;padding:20px}}
 .grade{{display:grid;grid-template-columns:repeat(auto-fit,minmax(315px,1fr));gap:16px}}article{{background:white;border:1px solid #dae1e9;border-radius:10px;padding:12px;box-shadow:0 2px 8px #0001}}article img{{width:100%;aspect-ratio:4/3;object-fit:contain}}a{{color:#285783;text-decoration:none}}article p{{font-weight:600}}.aviso{{background:#e8edf4;border-left:4px solid #355877;padding:14px}}.links{{display:flex;gap:16px;flex-wrap:wrap}}</style></head><body>
 <h1>TESTE COMPLETO — PCA 1D / GMM K4 n_init5</h1>
-<p class="aviso">Execucao de 10% F1–F9 e 10% F10 (mesmos {len(ids)} indices de teste ja avaliados anteriormente). Resultados exploratorios: <b>F10 reutilizado, nao e teste independente inedito</b>. τ* OOF congelado = {pacote.limiar_oof:.17g}. As assinaturas decorativas foram omitidas dos novos PNGs; o carater exploratorio continua documentado aqui e nos manifestos.</p>
+<p class="aviso">Execucao de {100 * float(pacote.configuracao['dados']['fracao_base']):g}% F1–F9 e {fracao_amostra_f10(pacote.configuracao):.2%} do F10 ({len(ids)} registros de teste). Resultados exploratorios: <b>F10 reutilizado, nao e teste independente inedito</b>. τ* OOF congelado = {pacote.limiar_oof:.17g}. As assinaturas decorativas foram omitidas dos novos PNGs; o carater exploratorio continua documentado aqui e nos manifestos.</p>
 <p>F10: AP={met['ap']:.7f} | MCC em τ*={met['mcc_limiar_oof']:.7f} | LogLoss={met['logloss']:.7f} | Score={met['score_composto_limiar_oof']:.7f}</p>
 <p><a href="../../visualizacao/galeria/index.html">Abrir galeria OOF completa</a> · <a href="../{pre}">Abrir PRE01 F10 interativo</a></p>
 <div class="grade">{cards}</div><h2>Resultados e proveniencia</h2><div class="links">{links}</div>
@@ -468,7 +471,8 @@ def galeria_final(folder,ids,pacote,met):
     with (gal/'index.html').open('x',encoding='utf-8') as f:f.write(html)
     hashes={f'graficos_gerados/{n}':sha(figs/n) for n,_ in GRAFICOS}
     salvar_json_novo(dest/'manifesto_teste_completo_pca1d_f10.json',{
-        'tipo':'TESTE_COMPLETO_PCA1D_10PCT_EXPLORATORIO_REPETIDO',
+        'tipo':'TESTE_COMPLETO_PCA1D_F10_EXPLORATORIO_REPETIDO',
+        'fracao_f10_dentro_do_fold':fracao_amostra_f10(pacote.configuracao),
         'amostra_f10_ja_vista_em_execucao_anterior':True,
         'nao_classificar_como_teste_independente_inedito':True,
         'n_dev':pacote.n_treino_original,'n_f10':len(ids),'tau_congelado_oof':pacote.limiar_oof,
@@ -487,7 +491,7 @@ def galeria_final(folder,ids,pacote,met):
 def validar_automacao(config):
     """Falha antes do OOF quando a automacao solicitada nao e suportada."""
     exigir(parametros_ok(config),
-           'Finalizacao automatica PCA1D exige fracao=.1, K4, n_init5, FULL, RUS16, seed42 e F10 reservado.')
+           'Finalizacao automatica PCA1D exige fracao=0.01, 0.03 ou 0.1; K4, n_init5, FULL, RUS16, seed42 e F10 reservado.')
     exigir(config.get('pca',{}).get('n_components') == [1],
            'Finalizacao automatica V1: apenas PCA 1D. Desative execucao.finalizacao_pca1d_automatica em 2D/3D.')
     for rel in ('src/treinamento_final_pca.py','src/avaliacao_final_pca.py',
@@ -503,36 +507,30 @@ def validar_automacao(config):
 
 
 def selecionar_amostra_f10(state, folder):
-    """Repete a regra de 10% por classe e semente 42 usada na Etapa 7.
+    """Amostra do F10 segundo o YAML congelado da execucao.
 
-    Os labels F10 sao usados somente para a amostragem predefinida e metricas.
-    Se o F10 ja foi previsto neste ensaio, le SOMENTE seus indices salvos.
+    Indices ja publicados nao sao sorteados novamente. Exige proveniencia
+    da fracao salva, caso exista; F1-F9 permanecem exclusivos do ajuste.
     """
-    path=folder/'vencedor/teste_final/indices_f10_amostra.npy'
-    folds=state['orig_folds']
+    fracao = fracao_amostra_f10(state['config'])
+    path = folder/'vencedor/teste_final/indices_f10_amostra.npy'
+    folds = state['orig_folds']
     if path.exists():
-        ids=np.load(path,allow_pickle=False)
-        exigir(ids.ndim==1 and ids.size>0 and np.all(np.diff(ids)>0)
-               and np.all(folds[ids]==10),'Indices F10 ja salvos invalidos.')
+        ids = np.load(path, allow_pickle=False)
+        exigir(ids.ndim == 1 and ids.size > 0 and np.all(np.diff(ids) > 0)
+               and np.all(folds[ids] == 10), 'Indices F10 ja salvos invalidos.')
+        manifesto = path.parent/'manifesto_amostra_f10.json'
+        if manifesto.is_file():
+            salvo = ler_json(manifesto)
+            exigir(float(salvo.get('fracao', -1)) == fracao,
+                   'Fracao F10 salva difere do YAML congelado.')
         return ids
     from src import orquestracao_oof as orq
-    al=state['config']['dados']['coluna_alvo']
-    y=orq._ler_alvo(state['parquet'],al)
-    exigir(y.shape==folds.shape,'Folds e TARGET com dimensoes distintas.')
-    f10=np.flatnonzero(folds==10)
-    ys=y[f10]
-    exigir(set(np.unique(ys).tolist())=={0,1},'F10 exige classes 0 e 1.')
-    rng=np.random.default_rng(42)
-    parts=[]
-    for classe in (0,1):
-        pos=f10[ys==classe]
-        n=max(2,round(.1*len(pos)))
-        exigir(n<=len(pos),'F10 sem observacoes suficientes de cada classe.')
-        parts.append(rng.choice(pos,size=n,replace=False))
-    ids=np.sort(np.concatenate(parts)).astype(np.int64)
-    exigir(np.all(folds[ids]==10) and np.all(np.diff(ids)>0),'Amostragem F10 desalinhada.')
+    y = orq._ler_alvo(state['parquet'], state['config']['dados']['coluna_alvo'])
+    exigir(y.shape == folds.shape, 'Folds e TARGET com dimensoes distintas.')
+    ids = selecionar_f10_estratificado(folds, y, state['config'])
     print(f'[F10] Amostra estratificada fixa: {len(ids)} linhas; fraude={int(y[ids].sum())}; '
-          'seed 42. F10 ja foi acessado anteriormente neste projeto.',flush=True)
+          f'seed 42; fracao {fracao:.2%} do proprio F10. F10 ja foi acessado no projeto.',flush=True)
     return ids
 
 

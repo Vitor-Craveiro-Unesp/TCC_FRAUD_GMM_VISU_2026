@@ -52,7 +52,7 @@ def calcular_conjunta_2d(gmm, eixo_x: np.ndarray, eixo_y: np.ndarray):
     y = np.asarray(eixo_y, dtype=float)
 
     geo._exigir(mu.ndim == 2 and mu.shape[1] == 2,
-                'A densidade conjunta do GMM01 exige PCA 2D.')
+                'A densidade conjunta do GMM01 exige 2 dimensoes.')
     geo._exigir(x.ndim == 1 and len(x) >= 2 and np.isfinite(x).all(),
                 'Eixo X da densidade conjunta invalido.')
     geo._exigir(y.ndim == 1 and len(y) >= 2 and np.isfinite(y).all(),
@@ -228,6 +228,9 @@ def gerar(config, data, destino, ext, dpi, csv):
     # =====================================================
 
     if d == 2:
+        # V2_TCC_TSNE_2D_COMPAT_20261103
+        geo._exigir(nomes in (['PC1','PC2'],['TSNE1','TSNE2']),
+                    'GMM01 2D exige PC1/PC2 ou TSNE1/TSNE2.')
         grade_2d = int(op.get('pontos_grade_2d', 220))
         geo._exigir(80 <= grade_2d <= 500,
                     'Quantidade de pontos da grade 2D invalida.')
@@ -477,8 +480,8 @@ def gerar(config, data, destino, ext, dpi, csv):
             float(np.max(mistura_2d)) * 1.08
         )
 
-        ax3d.set_xlabel('PC1', labelpad=9)
-        ax3d.set_ylabel('PC2', labelpad=9)
+        ax3d.set_xlabel(nomes[0], labelpad=9)
+        ax3d.set_ylabel(nomes[1], labelpad=9)
         ax3d.set_zlabel(
             'Densidade conjunta',
             labelpad=11
@@ -526,7 +529,9 @@ def gerar(config, data, destino, ext, dpi, csv):
         )
 
         stem3d = (
-            'GMM01_densidade_conjunta_superficie_PCA2D'
+            ('GMM01_densidade_conjunta_superficie_PCA2D'
+             if nomes == ['PC1','PC2'] else
+             'GMM01_densidade_conjunta_superficie_TSNE2D')
         )
 
         geo._guardar(

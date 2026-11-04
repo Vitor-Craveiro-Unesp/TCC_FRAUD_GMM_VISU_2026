@@ -127,7 +127,8 @@ def avaliar_f10_em_memoria(
     df_f10: pd.DataFrame,
     folds_f10: Any,
     linhas_originais: Any,
-) -> tuple[pd.DataFrame, dict]:
+    *, retornar_coordenadas: bool = False,
+) -> tuple[pd.DataFrame, dict] | tuple[pd.DataFrame, dict, pd.DataFrame]:
     """Apenas avalia dados entregues explicitamente; nunca acessa arquivos.
 
     Atenção: testar com F10 REAL depende de autorização posterior e
@@ -166,7 +167,15 @@ def avaliar_f10_em_memoria(
     y = df_f10[alvo]
     _validar_vetores(y, pd.Series(np.full(n, 0.5), index=y.index))
     entrada = df_f10.drop(columns=[alvo]).copy()
-    scores = pacote.prever_sem_rotulos(entrada)
+    if retornar_coordenadas:
+        scores, coordenadas = pacote.prever_com_coordenadas_sem_rotulos(entrada)
+        if (not isinstance(coordenadas, pd.DataFrame) or
+                not coordenadas.index.equals(df_f10.index) or
+                coordenadas.shape != (n, int(escolha['configuracao']['reducao']['n_components'])) or
+                not np.isfinite(coordenadas.to_numpy(dtype=np.float64)).all()):
+            raise RuntimeError("Coordenadas da inferencia F10 nao preservaram ordem/dimensao.")
+    else:
+        scores = pacote.prever_sem_rotulos(entrada)
     if not isinstance(scores, pd.Series) or not scores.index.equals(df_f10.index):
         raise RuntimeError("Scores nao preservaram a ordem de avaliacao.")
     resultado = avaliar_scores_com_limiar_oof_congelado(y, scores, limiar_mcc_oof=tau)
@@ -182,4 +191,8 @@ def avaliar_f10_em_memoria(
         "predicao_tau_0_50": (s >= 0.5).astype(np.uint8),
         "predicao_tau_mcc_oof": (s >= tau).astype(np.uint8),
     })
+    if retornar_coordenadas:
+        geom = coordenadas.copy(deep=True)
+        geom.insert(0, 'linha_original', ids.astype(np.int64))
+        return tabela, resultado, geom
     return tabela, resultado

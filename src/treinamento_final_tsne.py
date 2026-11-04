@@ -109,8 +109,12 @@ class PacoteFinalTSNE:
     def limiar_oof(self) -> float:
         return float(self.escolha_oof["limiar_mcc_oof"])
 
-    def prever_sem_rotulos(self, df_sem_alvo: pd.DataFrame) -> pd.Series:
-        """Inferencia OOS: sem fit, sem y e sem otimizacao de limiar."""
+    def prever_com_coordenadas_sem_rotulos(self, df_sem_alvo: pd.DataFrame) -> tuple[pd.Series, pd.DataFrame]:
+        """Uma unica inferencia OOS devolve scores e embedding alinhados.
+
+        Nenhum fit e chamado. A copia das coordenadas possibilita os graficos
+        F10 sem recalcular a transformacao estocastica ou tocar no alvo.
+        """
         if not isinstance(df_sem_alvo, pd.DataFrame) or df_sem_alvo.empty:
             raise ValueError("Entrada de inferencia deve ser DataFrame nao vazio.")
         alvo = self.configuracao["dados"]["coluna_alvo"]
@@ -124,9 +128,22 @@ class PacoteFinalTSNE:
         x_enc = self.encoder.transform(x)
         x_pre = self.imputador.transform(x_enc)
         x_red = self.tsne.transform(x_pre)  # out-of-sample, nunca refit
+        if (not isinstance(x_red, pd.DataFrame) or
+                not x_red.index.equals(df_sem_alvo.index) or
+                x_red.shape[1] != int(self.escolha_oof['configuracao']['reducao']['n_components']) or
+                not np.isfinite(x_red.to_numpy(dtype=np.float64)).all()):
+            raise RuntimeError("Coordenadas OOS invalidas, sem ordem preservada ou dimensao divergente.")
         scores = PreditorProbabilisticoGMM(self.gmm, self.risco).prever_probabilidade(x_red)
-        if not scores.index.equals(df_sem_alvo.index) or not np.isfinite(scores.to_numpy()).all() or not scores.between(0, 1).all():
+        if (not isinstance(scores, pd.Series) or
+                not scores.index.equals(df_sem_alvo.index) or
+                not np.isfinite(scores.to_numpy(dtype=np.float64)).all() or
+                not scores.between(0, 1).all()):
             raise RuntimeError("Scores invalidos ou fora de ordem na inferencia t-SNE.")
+        return scores, x_red.copy(deep=True)
+
+    def prever_sem_rotulos(self, df_sem_alvo: pd.DataFrame) -> pd.Series:
+        """API historica: somente probabilidades, sem revelar coordenadas."""
+        scores, _ = self.prever_com_coordenadas_sem_rotulos(df_sem_alvo)
         return scores
 
 

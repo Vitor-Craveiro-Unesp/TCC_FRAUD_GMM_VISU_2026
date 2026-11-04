@@ -23,6 +23,7 @@ import yaml
 
 from src import estrutura_saida as layout
 from src.folds import hash_arquivo
+from src.amostragem_f10 import fracao_amostra_f10
 from src.validacao_oof import grade_candidatos_oof, prever_fold_oof, validar_divisao
 from src.metricas_oof import avaliar_probabilidades, avaliar_oof_consolidado
 from sklearn.metrics import average_precision_score, matthews_corrcoef, log_loss
@@ -123,6 +124,7 @@ def validar_operacao(config):
     if not (ex['n_jobs'] == -1 or isinstance(ex['n_jobs'], int)
             and not isinstance(ex['n_jobs'], bool) and ex['n_jobs'] >= 1):
         raise ValueError('execucao.n_jobs precisa ser -1 ou inteiro positivo.')
+    fracao_amostra_f10(config)  # campo obrigatorio e independente de dados.fracao_base
     f = config['dados']['fracao_base']
     if not isinstance(f, (int, float)) or isinstance(f, bool) or not 0 < f <= 1:
         raise ValueError('dados.fracao_base precisa estar em (0,1].')
@@ -512,27 +514,63 @@ def main(argv=None, *, raiz=None):
     modos.add_argument('--executar',action='store_true',help='OOF e visualizacoes automaticas.')
     modos.add_argument('--so-visualizacoes',action='store_true',help='Retomar as visualizacoes de um ensaio OOF concluido.')
     modos.add_argument('--concluir-teste-final',action='store_true',help='Completar F10 de OOF ja concluido sem repetir treinamento OOF.')
+    modos.add_argument('--concluir-galeria-f10',action='store_true',help='Somente t-SNE 1D/2D/3D: concluir galeria F10 sem repetir ajuste ou inferencia.')
     parser.add_argument('--por-fold',type=int,default=300,help='Linhas por fold em --ensaio (>=4).')
     parser.add_argument('--experimento',type=Path,help='Pasta concluida, exigida em --so-visualizacoes.')
     a=parser.parse_args(argv)
     if a.por_fold < 4: parser.error('--por-fold precisa ser >=4.')
     raiz=Path(raiz) if raiz else Path(__file__).resolve().parents[1]
+    if a.concluir_galeria_f10:
+        if a.experimento is None:parser.error('--concluir-galeria-f10 exige --experimento.')
+        alvo = raiz/a.experimento if not a.experimento.is_absolute() else a.experimento
+        config_salva=alvo/'configuracao.yaml'
+        if not config_salva.is_file():raise FileNotFoundError('Configuracao de experimento ausente.')
+        cfg_salva=yaml.safe_load(config_salva.read_text(encoding='utf-8-sig'))
+        if str(cfg_salva['reducao']['metodo']).upper() != 'TSNE':
+            raise RuntimeError('Retomada de galeria F10 exige t-SNE.')
+        dim_salva = cfg_salva['tsne']['n_components']
+        if dim_salva in (1, [1]):
+            from src.visualizacao_final_completa_tsne1d import gerar_galeria
+        elif dim_salva in (2, [2]):
+            from src.visualizacao_final_completa_tsne2d import gerar_galeria
+        elif dim_salva in (3, [3]):
+            from src.visualizacao_final_completa_tsne3d import gerar_galeria
+        else:
+            raise RuntimeError('Dimensao t-SNE nao suportada para galeria.')
+        gerar_galeria(alvo)
+        return alvo
     if a.concluir_teste_final:
         if a.experimento is None:parser.error('--concluir-teste-final exige --experimento.')
         alvo = raiz/a.experimento if not a.experimento.is_absolute() else a.experimento
         config_salva=alvo/'configuracao.yaml'
         if not config_salva.is_file():
             raise RuntimeError('Configuração do experimento de retomada ausente.')
-        dim=yaml.safe_load(config_salva.read_text(encoding='utf-8-sig'))['pca']['n_components']
-        if dim == [1]:
-            from src.finalizacao_automatica_pca1d import concluir_ensaio
-        elif dim == [2]:
-            from src.finalizacao_automatica_pca2d import concluir_ensaio
-        elif dim == [3]:
-            from src.finalizacao_automatica_pca3d import concluir_ensaio
+        cfg_salva=yaml.safe_load(config_salva.read_text(encoding='utf-8-sig'))
+        metodo_salvo=str(cfg_salva['reducao']['metodo']).upper()
+        if metodo_salvo == 'TSNE':
+            dim_salva = cfg_salva['tsne']['n_components']
+            if dim_salva in (1, [1]):
+                from src.finalizacao_automatica_tsne1d import concluir_ensaio
+            elif dim_salva in (2, [2]):
+                from src.finalizacao_automatica_tsne2d import concluir_ensaio
+            elif dim_salva in (3, [3]):
+                from src.finalizacao_automatica_tsne3d import concluir_ensaio
+            else:
+                raise RuntimeError('Dimensao t-SNE nao suportada para finalizacao.')
+            concluir_ensaio(alvo, raiz=raiz)
+        elif metodo_salvo == 'PCA':
+            dim=cfg_salva['pca']['n_components']
+            if dim == [1]:
+                from src.finalizacao_automatica_pca1d import concluir_ensaio
+            elif dim == [2]:
+                from src.finalizacao_automatica_pca2d import concluir_ensaio
+            elif dim == [3]:
+                from src.finalizacao_automatica_pca3d import concluir_ensaio
+            else:
+                raise RuntimeError('Dimensao PCA de retomada nao suportada.')
+            concluir_ensaio(alvo)
         else:
-            raise RuntimeError('Dimensão PCA de retomada não suportada.')
-        concluir_ensaio(alvo)
+            raise RuntimeError('Metodo de retomada nao suportado.')
         return alvo
     if a.so_visualizacoes:
         if a.experimento is None:parser.error('--so-visualizacoes requer --experimento.')
@@ -542,22 +580,49 @@ def main(argv=None, *, raiz=None):
     yaml_bytes=arquivo_yaml.read_bytes()
     config=yaml.safe_load(yaml_bytes.decode('utf-8-sig'))
     validar_operacao(config)
+    # GUARDA_LAYOUT_TSNE_YAML_V1_20261103 / CLI novo YAML
+    from src.garantia_layout_tsne import verificar_layout_tsne
+    verificar_layout_tsne(config, fase='YAML_novo')
     automatizar_f10 = bool(config.get('execucao', {}).get('finalizacao_pca1d_automatica', False))
+    metodo_selecionado = str(config['reducao']['metodo']).upper()
+    # A flag legada despacha PCA e t-SNE 1D/2D/3D.
+    if metodo_selecionado == 'TSNE' and not automatizar_f10:
+        print('[ATENCAO TSNE] O comando oficial produz OOF e galeria OOF; '
+              'nao executa modelo final/F10 nesta configuracao.', flush=True)
     if automatizar_f10:
-        dim=config.get('pca', {}).get('n_components')
-        if dim == [1]:
-            from src.finalizacao_automatica_pca1d import validar_automacao
-        elif dim == [2]:
-            from src.finalizacao_automatica_pca2d import validar_automacao
-        elif dim == [3]:
-            from src.finalizacao_automatica_pca3d import validar_automacao
+        if metodo_selecionado == 'TSNE':
+            dimensao_tsne = config['tsne']['n_components']
+            if dimensao_tsne in (1, [1]):
+                from src.finalizacao_automatica_tsne1d import validar_automacao
+            elif dimensao_tsne in (2, [2]):
+                from src.finalizacao_automatica_tsne2d import validar_automacao
+            elif dimensao_tsne in (3, [3]):
+                from src.finalizacao_automatica_tsne3d import validar_automacao
+            else:
+                raise RuntimeError('Dimensao t-SNE de finalizacao nao suportada.')
+        elif metodo_selecionado == 'PCA':
+            dim=config.get('pca', {}).get('n_components')
+            if dim == [1]:
+                from src.finalizacao_automatica_pca1d import validar_automacao
+            elif dim == [2]:
+                from src.finalizacao_automatica_pca2d import validar_automacao
+            elif dim == [3]:
+                from src.finalizacao_automatica_pca3d import validar_automacao
+            else:
+                raise RuntimeError('Finalizacao automatica disponivel apenas para PCA 1D, 2D ou 3D.')
         else:
-            raise RuntimeError('Finalizacao automatica disponivel apenas para PCA 1D, 2D ou 3D.')
+            raise RuntimeError('Metodo de reducao nao suportado.')
         validar_automacao(config)
     if a.planejar:
         planejar(config)
         if automatizar_f10:
-            print('ETAPA FINAL AUTOMATICA: F1-F9 final, F10 exploratorio 10%, 12 graficos e PRE01.')
+            if metodo_selecionado == 'TSNE':
+                nd = config['tsne']['n_components']
+                nd = nd[0] if isinstance(nd, list) else nd
+                quantidade = {1: 12, 2: 15, 3: 12}[nd]
+                print(f'ETAPA FINAL TSNE {nd}D: modelo F1-F9, F10 exploratorio {fracao_amostra_f10(config):.2%} do fold, {quantidade} PNGs e PRE01 offline.')
+            else:
+                print(f'ETAPA FINAL PCA: modelo F1-F9; F10 exploratorio de {fracao_amostra_f10(config):.2%} do F10; graficos e PRE01 conforme a dimensao.')
         return None
     if a.experimento is not None:parser.error('--experimento apenas com --so-visualizacoes ou --concluir-teste-final.')
     arquivo_base=raiz/config['dados']['arquivo']
@@ -597,19 +662,54 @@ def main(argv=None, *, raiz=None):
     final=_finalizar(pasta,manifest,config)
     print(f'PASSO 06.03 - EXECUCAO CONCLUIDA EM {final}')
     executar_visualizacoes(final)
-    if automatizar_f10 and a.executar:
-        print('[ORQUESTRADOR] Iniciando finalizacao automatica PCA (F1-F9 + F10 exploratorio)...',flush=True)
-        dim=config.get('pca', {}).get('n_components')
-        if dim == [1]:
-            from src.finalizacao_automatica_pca1d import concluir_ensaio
-        elif dim == [2]:
-            from src.finalizacao_automatica_pca2d import concluir_ensaio
-        elif dim == [3]:
-            from src.finalizacao_automatica_pca3d import concluir_ensaio
+    if a.executar and metodo_selecionado == 'TSNE':
+        dimensao_tsne = config['tsne']['n_components']
+        if dimensao_tsne in (1, [1]):
+            from src.pre01_oof_tsne1d import integrar_pre01_oof
+        elif dimensao_tsne in (2, [2]):
+            from src.pre01_oof_tsne2d import integrar_pre01_oof
+        elif dimensao_tsne in (3, [3]):
+            from src.pre01_oof_tsne3d import integrar_pre01_oof
         else:
-            raise RuntimeError('Dimensionalidade PCA final invalida.')
-        concluir_ensaio(final)
-        print('[ORQUESTRADOR] COMPLETO: OOF, modelo final, F10 e galeria no mesmo experimento.',flush=True)
+            raise RuntimeError('PRE01 t-SNE: dimensao nao suportada.')
+        integrar_pre01_oof(final, raiz=raiz)
+        if dimensao_tsne in (3, [3]):
+            from src.galeria_interativa_oof_tsne3d import integrar_tsne13_oof
+            integrar_tsne13_oof(final, raiz=raiz)
+    if automatizar_f10 and a.executar:
+        if metodo_selecionado == 'TSNE':
+            ndim = config['tsne']['n_components']
+            if ndim in (1, [1]):
+                from src.finalizacao_automatica_tsne1d import concluir_ensaio
+                from src.visualizacao_final_completa_tsne1d import gerar_galeria
+                nd, quantidade = 1, 12
+            elif ndim in (2, [2]):
+                from src.finalizacao_automatica_tsne2d import concluir_ensaio
+                from src.visualizacao_final_completa_tsne2d import gerar_galeria
+                nd, quantidade = 2, 15
+            elif ndim in (3, [3]):
+                from src.finalizacao_automatica_tsne3d import concluir_ensaio
+                from src.visualizacao_final_completa_tsne3d import gerar_galeria
+                nd, quantidade = 3, 12
+            else:
+                raise RuntimeError('Dimensao t-SNE de finalizacao nao suportada.')
+            print(f'[ORQUESTRADOR] Iniciando finalizacao t-SNE {nd}D F1-F9 + F10...', flush=True)
+            concluir_ensaio(final, raiz=raiz)
+            galeria_f10 = gerar_galeria(final)
+            print(f'[ORQUESTRADOR] TSNE {nd}D COMPLETO: OOF + F10 + {quantidade} PNGs + PRE01 em', galeria_f10, flush=True)
+        else:
+            print('[ORQUESTRADOR] Iniciando finalizacao automatica PCA (F1-F9 + F10 exploratorio)...',flush=True)
+            dim=config.get('pca', {}).get('n_components')
+            if dim == [1]:
+                from src.finalizacao_automatica_pca1d import concluir_ensaio
+            elif dim == [2]:
+                from src.finalizacao_automatica_pca2d import concluir_ensaio
+            elif dim == [3]:
+                from src.finalizacao_automatica_pca3d import concluir_ensaio
+            else:
+                raise RuntimeError('Dimensionalidade PCA final invalida.')
+            concluir_ensaio(final)
+            print('[ORQUESTRADOR] COMPLETO: OOF, modelo final, F10 e galeria no mesmo experimento.',flush=True)
     return final
 
 
@@ -620,6 +720,10 @@ def executar_visualizacoes(experimento):
     logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
     from src import visualizacao_oof, visualizacao_geometrica, visualizacao_integrada
     experimento=Path(experimento).resolve()
+    # GUARDA_LAYOUT_TSNE_YAML_V1_20261103 / visualizacao/retomada
+    from src.garantia_layout_tsne import verificar_layout_tsne
+    config_grafico = yaml.safe_load((experimento / 'configuracao.yaml').read_text(encoding='utf-8-sig'))
+    verificar_layout_tsne(config_grafico, fase='antes_galeria_OOF')
     caminho_manifest=experimento/'manifesto.json'
     manifest=json.loads(caminho_manifest.read_text(encoding='utf-8-sig'))
     if manifest.get('status')!='concluido_06_03' or manifest.get('versao_layout')!=2:

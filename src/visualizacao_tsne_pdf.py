@@ -208,16 +208,28 @@ def trustworthiness_perplexity(config, data, dest, ext, dpi, csv, *, origem='des
     minimo = max(0, float(df['trustworthiness'].min()) - .025)
     ax.set_ylim(minimo, 1.003)
     ax.set(xlabel='Perplexity', ylabel='Trustworthiness (0 a 1; eixo ampliado)')
-    ax.set_title('t-SNE 02 — Preservação de vizinhanças | Trustworthiness × Perplexity')
+    # PATCH_LAYOUT_TSNE1D_OOF_20261103: faixa exclusiva para titulo e rodape.
+    ax.set_title('')
     ax.grid(alpha=.2)
     ax.legend(loc='best', fontsize=9)
     aviso = 'Prévia sintética' if origem == 'simulado' else 'Desenvolvimento F1–F9'
-    fig.text(.5,.014,
-             f'{aviso}: amostra não supervisionada de {len(idx)} observações; '
-             f'dimensão {params["n_components"]}D; k={ks}; F10 não utilizado. '
-             'Diagnóstico auxiliar, não altera seleção OOF.',
-             ha='center',fontsize=8)
-    fig.tight_layout(rect=(0,.052,1,1))
+    fig.suptitle('t-SNE 02 — Preservação de vizinhanças | Trustworthiness × Perplexity',
+                 fontsize=13.4, fontweight='bold', y=.974)
+    rodape = (f'{aviso}: amostra não supervisionada de {len(idx)} observações; '
+              f'dimensão {params["n_components"]}D; k={ks}; F10 não utilizado. '
+              'Diagnóstico auxiliar, não altera seleção OOF.')
+    from textwrap import wrap
+    fig.text(.5, .060, '\n'.join(wrap(rodape, width=94)),
+             ha='center', va='center', fontsize=8.4, color='#526077', linespacing=1.45)
+    fig.tight_layout(rect=(.015, .145, .985, .91))
+    # CORRECAO_1D_OOF_PRE01_20261103_V2 / TSNE02
+    for _txt_layout in list(fig.texts):
+        if _txt_layout is not getattr(fig, '_suptitle', None):
+            _txt_layout.remove()
+    ax.set_title('')
+    fig.suptitle('Preservação de vizinhanças | Trustworthiness × Perplexity',
+                 fontsize=13.5, fontweight='bold', y=.975)
+    fig.tight_layout(rect=(.015, .04, .985, .92))
     nome = 'TSNE02_trustworthiness_vs_perplexity'
     geo._guardar(fig, dest, nome, ext, dpi)
     if csv:
@@ -270,15 +282,25 @@ def diagnostico_kl(config, data, dest, ext, dpi, csv, *, origem='desenvolvimento
                 f'Embedding: {d}D | perplexity={p.get("perplexity")}\n'
                 f'{n:,} observações | métrica={p.get("metric", "n/d")}',
                 transform=axs[1].transAxes,color='#475569',fontsize=9.5)
-    fig.suptitle('14 — t-SNE | Diagnóstico KL / otimização', fontsize=15,
-                 weight='bold', y=.985)
+    # PATCH_LAYOUT_TSNE1D_OOF_20261103: rodape fora das caixas.
+    fig.suptitle('14 — t-SNE | Diagnóstico KL / otimização',
+                 fontsize=15, weight='bold', y=.965)
     nota = ('Histórico de KL por iteração: indisponível neste redutor; '
             'não foi criada curva sintética.')
     sufixo = 'PRÉVIA SINTÉTICA' if origem == 'simulado' else 'Desenvolvimento F1–F9'
-    fig.text(.5,.065,nota,fontsize=9,ha='center',color='#b45309')
-    fig.text(.5,.03,f'{sufixo}; F10 não utilizado. KL final e tempo não validam AP/MCC.',
-             ha='center',fontsize=8.5,color='#64748b')
-    fig.subplots_adjust(left=.055,right=.945,top=.83,bottom=.17,wspace=.085)
+    fig.text(.5, .155, nota, fontsize=8.8, ha='center',
+             va='center', color='#b45309')
+    fig.text(.5, .102,
+             f'{sufixo}; F10 não utilizado. KL final e tempo não validam AP/MCC.',
+             ha='center', va='center', fontsize=8.6, color='#64748b')
+    fig.subplots_adjust(left=.055, right=.945, top=.81, bottom=.30, wspace=.085)
+    # CORRECAO_1D_OOF_PRE01_20261103_V2 / TSNE14
+    for _txt_layout in list(fig.texts):
+        if _txt_layout is not getattr(fig, '_suptitle', None):
+            _txt_layout.remove()
+    fig.suptitle('t-SNE | Diagnóstico KL / otimização',
+                 fontsize=15, weight='bold', y=.965)
+    fig.subplots_adjust(left=.055, right=.945, top=.83, bottom=.12, wspace=.085)
     nome = '14_tsne_diagnostico'
     geo._guardar(fig,dest,nome,ext,dpi)
     if csv:

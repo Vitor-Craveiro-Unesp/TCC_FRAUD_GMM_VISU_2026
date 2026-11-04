@@ -615,13 +615,13 @@ def _scree(config, data, dest, ext, dpi, csv, *, origem='desenvolvimento'):
                bbox_to_anchor=(.5, .905), fontsize=9.4, frameon=False)
 
 
-    
+
     _exigir(
         origem in ('desenvolvimento', 'simulado'),
         'Origem do Scree PCA desconhecida.'
     )
 
-    
+
 
     fig.subplots_adjust(
         left=.105,
@@ -1115,22 +1115,35 @@ def _tsne_histograma_1d(config, data, dest, ext, dpi, csv, op, *, origem='desenv
         raise ValueError('t-SNE 13: colorir_por invalido.')
 
     ax.set_xlabel('t-SNE 1 (coordenada do embedding; sem variância explicada)')
-    ax.set_title('13 — t-SNE 1D | Histograma do embedding')
+    # PATCH_LAYOUT_TSNE1D_OOF_20261103: faixa exclusiva para titulo, configuracao e rodape.
+    ax.set_title('')
     ax.grid(axis='y', alpha=.18, linestyle=':')
     if colorir != 'risco':
         ax.legend(loc='best', fontsize=8)
     p = parametros
     subtitulo = (f"Configuração: perplexity={p.get('perplexity', 'n/d')} | "
                  f"metric={p.get('metric', 'n/d')} | 1 dimensão")
-    fig.text(.5, .925, subtitulo, ha='center', fontsize=9, color='#374151')
+    fig.suptitle('13 — t-SNE 1D | Histograma do embedding',
+                 fontsize=14.2, fontweight='bold', y=.969)
+    fig.text(.5, .912, subtitulo, ha='center', fontsize=9.2, color='#374151')
     rodape = ('Leitura local: distâncias globais não devem ser superinterpretadas. '
               + nota + ' Desenvolvimento F1–F9; F10 não utilizado.')
     if origem == 'simulado':
         rodape = 'PRÉVIA SINTÉTICA: t-SNE ajustado em dados simulados. ' + rodape
-    # Texto dividido em duas linhas para caber em resoluções menores.
-    fig.text(.5, .05, rodape, ha='center', va='center', fontsize=7.3,
-             color='#526077', wrap=True)
-    fig.subplots_adjust(top=.87, bottom=.19)
+    from textwrap import wrap
+    fig.text(.5, .070, '\n'.join(wrap(rodape, width=98)),
+             ha='center', va='center', fontsize=8.1, color='#526077',
+             linespacing=1.45)
+    fig.subplots_adjust(left=.10, right=.96, top=.83, bottom=.24)
+    # CORRECAO_1D_OOF_PRE01_20261103_V2 / TSNE13
+    for _txt_layout in list(fig.texts):
+        if _txt_layout is not getattr(fig, '_suptitle', None):
+            _txt_layout.remove()
+    if getattr(fig, '_suptitle', None) is not None:
+        fig._suptitle.set_visible(False)
+    ax.set_title('t-SNE 1D | Histograma do embedding', pad=12)
+    ax.set_xlabel('t-SNE 1')
+    fig.subplots_adjust(left=.10, right=.96, top=.91, bottom=.14)
     nome = '13_tsne_mapa_TSNE1'
     _guardar(fig, dest, nome, ext, dpi)
     if csv:
@@ -1152,6 +1165,11 @@ def _projecoes(config,data,dest,ext,dpi,csv,metodo):
             'Projecao: colorir_por desconhecido.')
     if metodo == 'TSNE' and coord.shape[1] == 1:
         _tsne_histograma_1d(config, data, dest, ext, dpi, csv, op)
+        return
+    # V2_TCC_TSNE_2D_COMPAT_20261103 | TSNE13 2D com titulo e rodape separados
+    if metodo == 'TSNE' and coord.shape[1] == 2:
+        from src.visualizacao_tsne_2d import gerar_projecao_2d
+        gerar_projecao_2d(config,data,dest,ext,dpi,csv,origem='desenvolvimento',metodo='TSNE')
         return
     if metodo == 'TSNE' and coord.shape[1] == 3:
         from src import visualizacao_tsne_pdf as tsne_pdf
@@ -1541,7 +1559,7 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
     # A origem do MCC deve ser explícita. Testes sintéticos não são OOF.
     origem_mcc = avaliacao.get('origem')
     if origem_mcc is not None:
-        _exigir(origem_mcc in ('oof', 'simulado'),
+        _exigir(origem_mcc in ('oof', 'simulado', 'f10_real_3pct', 'f10_amostral_congelado'),
                 'Origem da avaliação GMM08 desconhecida.')
     if origem_mcc == 'oof':
         nome_mcc = 'MCC OOF'
@@ -1549,6 +1567,10 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
     elif origem_mcc == 'simulado':
         nome_mcc = 'MCC da simulação'
         nota_mcc = 'PRÉVIA SINTÉTICA: MCC calculado apenas nos dados simulados; não é OOF real'
+    elif origem_mcc in ('f10_real_3pct', 'f10_amostral_congelado'):
+        # HOTFIX_V7_GMM08_ORIGEM_F10_20261103
+        nome_mcc = 'MCC F10'
+        nota_mcc = 'MCC calculado no F10 com tau* congelado em OOF F1-F9'
     else:
         nome_mcc = 'MCC (origem não identificada)'
         nota_mcc = 'Origem da avaliação não informada; não afirmar que é OOF'
@@ -1582,7 +1604,7 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
 
 
 
-                    
+
             # A regiao de mudanca usa os mesmos scores nos dois paineis 2D.
             # Em 3D, manter a hachura apenas na coluna MCC.
             if (dim == 2 or tipo == 'mcc') and mudou.any():
@@ -1607,7 +1629,7 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
                     f'Corte {nomes[par[0]]} × {nomes[par[1]]}\n'
                     f'{nomes[omitida]} fixada na média do desenvolvimento = '
                     f'{fixos[omitida]:.3g}', fontsize=9.5, pad=10)
-                
+
             else:
                 titulo_corte = 'CORTE FIXO' if tipo == 'fixo' else 'LIMIAR ÓTIMO DO MCC'
                 simbolo_tau = 'τ' if tipo == 'fixo' else 'τ*'
@@ -1622,7 +1644,7 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
 
 
 
-                
+
     # Mesma escala de risco nos dois cortes.
     if dim == 2:
         cax = fig.add_axes([.905, .155, .012, .605])
@@ -1652,7 +1674,7 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
                  ha='center', fontsize=12, weight='bold', color='#23334a')
 
 
-    
+
 
     from matplotlib.lines import Line2D
     from matplotlib.patches import Patch
@@ -1677,7 +1699,7 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
                        label=f'{nome} — seção 95%')
                        for k, nome in enumerate(gm.saidas_))
 
-        
+
     fig.legend(handles=legenda, loc='upper center',
                bbox_to_anchor=(.49, .868 if dim == 2 else .897),
                ncol=min(6, len(legenda)),
@@ -1722,7 +1744,7 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
 
 
 
-    
+
     _guardar(fig, dest, f'GMM08_mapa_risco_{dim}d_comparativo', ext, dpi)
 
 
@@ -1763,6 +1785,9 @@ def executar(experimento, *, raiz=None, somente_planejar=False):
     experimento=Path(experimento).resolve()
     raiz=Path(raiz).resolve() if raiz is not None else Path(__file__).resolve().parents[1]
     cfg,grade,escolha,y_av_oof,p_av_oof = vis._ler_resultados(experimento)
+    # GUARDA_LAYOUT_TSNE_YAML_V1_20261103 / geometria direta
+    from src.garantia_layout_tsne import verificar_layout_tsne
+    verificar_layout_tsne(cfg, fase='antes_geometria_OOF')
     manifest=json.loads((experimento/'manifesto.json').read_text(encoding='utf-8-sig'))
     _exigir(manifest.get('status')=='concluido_06_03', 'Execucao OOF ainda nao concluida.')
     _exigir(escolha.get('teste_final_usado') is False,'Nao e permitido usar F10 na selecao.')
