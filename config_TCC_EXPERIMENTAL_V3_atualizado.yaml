@@ -102,8 +102,8 @@ avaliacao:
 execucao:
   finalizacao_pca1d_automatica: true
   n_jobs: -1
-  usar_cache: true
-  retomar: true
+  usar_cache: false
+  retomar: false
   diretorio_retomada: null
   proteger_resultados: true
 saidas:
