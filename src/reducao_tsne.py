@@ -100,6 +100,16 @@ class RedutorTSNE:
         if not isinstance(jobs, int) or isinstance(jobs, bool) or jobs == 0 or jobs < -1:
             raise ValueError("execucao.n_jobs deve ser -1 ou inteiro positivo.")
 
+    def _threads_tsne(self):
+        jobs = int(self.config.get('execucao', {}).get('n_jobs', 1))
+        # No Windows/local, preserve exactly the original openTSNE semantics.
+        # Only inside an SLURM allocation do we turn -1 into the granted CPUs.
+        import os
+        if not os.environ.get('SLURM_CPUS_PER_TASK'):
+            return jobs
+        from src.recursos_cluster import n_jobs_efetivo
+        return n_jobs_efetivo(jobs)
+
     @staticmethod
     def _validar_X(X):
         if not isinstance(X, pd.DataFrame) or X.empty:
@@ -142,7 +152,7 @@ class RedutorTSNE:
                 "bh" if int(p["n_components"]) == 3 else "auto"
             ),
             random_state=int(self.config["experimento"]["semente"]),
-            n_jobs=int(self.config.get("execucao", {}).get("n_jobs", 1)),
+            n_jobs=self._threads_tsne(),
         )
         embedding = modelo.fit(X_np)
 

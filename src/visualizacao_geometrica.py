@@ -19,6 +19,7 @@ from time import perf_counter
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from src.cores_gaussianas import cor_gaussiana
 from matplotlib.patches import Ellipse
 import numpy as np
 import pandas as pd
@@ -341,7 +342,7 @@ def _painel_parametros_gaussianos(config, data, dest, ext, dpi, csv):
                 continue
             info = bloco[j]
             k = pag * por_pagina + j
-            cor = plt.get_cmap('tab10')(k % 10)
+            cor = cor_gaussiana(int(k))
             ax.plot([.05,.05], [.06,.93],color=cor,lw=5,transform=ax.transAxes,solid_capstyle='round')
             ax.text(.09,.89,info['gaussiana'],transform=ax.transAxes,
                     fontsize=16,fontweight='bold',color='#f5f9ff',va='center')
@@ -726,7 +727,7 @@ def _pca_histograma_1d(config, data, dest, ext, dpi, csv, op, *, origem='desenvo
         for k in np.unique(grupos):
             subset = x[grupos == k]
             valores_hist, _ = np.histogram(subset, bins=edges, density=True)
-            cor = plt.get_cmap('tab20')(int(k) % 20)
+            cor = cor_gaussiana(int(k), paleta='tab20')
             ax.bar(mids, valores_hist, width=width * .93,
 
                    color=cor, alpha=.23, label=f'G{k+1} (n={len(subset)})')
@@ -920,7 +921,7 @@ def _pca_projecao_2d3d(config, data, dest, ext, dpi, csv, op, *, origem='desenvo
         _exigir(len(grupos) == len(y), 'Gaussianas e projeções não alinhadas.')
         for k in np.unique(grupos[idx]):
             indices = idx[grupos[idx] == k]
-            desenhar(indices, cor=plt.get_cmap('tab20')(int(k) % 20),
+            desenhar(indices, cor=cor_gaussiana(int(k), paleta='tab20'),
                      marcador='o', titulo=f'G{int(k)+1} (n={len(indices):,} exibidas)',
                      alpha=.52, tamanho=11)
         descricao = 'Dominância por responsabilidade GMM; não é classe de fraude'
@@ -951,7 +952,7 @@ def _pca_projecao_2d3d(config, data, dest, ext, dpi, csv, op, *, origem='desenvo
                     facecolor='none',
                     linestyle=(0, (4, 3)),
                     linewidth=1.8,
-                    edgecolor=plt.get_cmap('tab10')(k % 10),
+                    edgecolor=cor_gaussiana(int(k)),
                     alpha=0.95
                 ))
 
@@ -982,7 +983,7 @@ def _pca_projecao_2d3d(config, data, dest, ext, dpi, csv, op, *, origem='desenvo
             handles.append(
                 Line2D(
                     [0], [0],
-                    color=plt.get_cmap('tab10')(k % 10),
+                    color=cor_gaussiana(int(k)),
                     linestyle=(0, (4, 3)),
                     linewidth=1.8
                 )
@@ -1089,7 +1090,7 @@ def _tsne_histograma_1d(config, data, dest, ext, dpi, csv, op, *, origem='desenv
         for k in np.unique(grupos):
             subset = x[grupos == k]
             dens, _ = np.histogram(subset, bins=edges, density=True)
-            cor = plt.get_cmap('tab20')(int(k) % 20)
+            cor = cor_gaussiana(int(k), paleta='tab20')
             ax.bar(centros, dens, width=largura * .94,
                    color=cor, alpha=.26, label=f'G{k+1} (n={len(subset)})')
             if len(subset) >= 3 and op.get('curvas_suavizadas_1d', True):
@@ -1203,7 +1204,7 @@ def _projecoes(config,data,dest,ext,dpi,csv,metodo):
                 _,descricao = _rotulo_gaussiana(r,regra)
                 if len(sub):ax.scatter(coord[sub,par[0]],
                     (np.zeros(len(sub))+k*.008) if len(par)==1 else coord[sub,par[1]],
-                    s=10,alpha=.5,color=plt.get_cmap('tab10')(k % 10),
+                    s=10,alpha=.5,color=cor_gaussiana(int(k)),
                     label=f'{nome} — {descricao}',rasterized=True)
         if op.get('mostrar_contornos_gaussianas',False):
             gm=data['gmm']; nstd=2.
@@ -1211,7 +1212,7 @@ def _projecoes(config,data,dest,ext,dpi,csv,metodo):
                 if len(par)==1:
                     mean=gm.modelo_.means_[k,par[0]]
                     sd=np.sqrt(_covariancia(gm,k)[par[0],par[0]])
-                    ax.axvspan(mean-nstd*sd,mean+nstd*sd,alpha=.06,color=plt.get_cmap('tab10')(k%10))
+                    ax.axvspan(mean-nstd*sd,mean+nstd*sd,alpha=.06,color=cor_gaussiana(int(k)))
                 else:
                     cov=_covariancia(gm,k)[np.ix_(par,par)]
                     eig,V=np.linalg.eigh(cov)
@@ -1219,7 +1220,7 @@ def _projecoes(config,data,dest,ext,dpi,csv,metodo):
                         theta=np.degrees(np.arctan2(V[1,1],V[0,1]))
                         ax.add_patch(Ellipse(gm.modelo_.means_[k,list(par)],
                              width=2*nstd*np.sqrt(eig[1]),height=2*nstd*np.sqrt(eig[0]),
-                             angle=theta,facecolor='none',edgecolor=plt.get_cmap('tab10')(k%10),alpha=.55))
+                             angle=theta,facecolor='none',edgecolor=cor_gaussiana(int(k)),alpha=.55))
         if len(par)==1:
             ax.set(xlabel=names[par[0]],ylabel='Separacao vertical apenas visual')
         else:
@@ -1397,7 +1398,7 @@ def _fronteira_1d_comparativa(config, data, gm, op, plano, idx, tau_star,
                 media=float(gm.modelo_.means_[k,coluna])
                 sigma=float(np.sqrt(_covariancia(gm,k)[coluna,coluna]))
                 r=norm.ppf(.975)*sigma
-                cor=plt.get_cmap('tab10')(k%10)
+                cor=cor_gaussiana(int(k))
                 ax.axvspan(media-r,media+r,facecolor=cor,alpha=.055,zorder=1)
                 ax.axvline(media-r,color=cor,lw=1,ls='--',alpha=.65,zorder=2)
                 ax.axvline(media+r,color=cor,lw=1,ls='--',alpha=.65,zorder=2)
@@ -1454,7 +1455,7 @@ def _fronteira_1d_comparativa(config, data, gm, op, plano, idx, tau_star,
 
 
     if op.get('mostrar_gaussianas', True):
-        legenda += [Line2D([0],[0],color=plt.get_cmap('tab10')(k%10),
+        legenda += [Line2D([0],[0],color=cor_gaussiana(int(k)),
                             ls='--',lw=2,label=f'{gm.saidas_[k]} — intervalo 95%')
                     for k in range(n_comp)]
 
@@ -1596,7 +1597,7 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
                     if geo is None:
                         continue
                     centro, largura, altura, angulo = geo
-                    cor = plt.get_cmap('tab10')(k % 10)
+                    cor = cor_gaussiana(int(k))
                     ax.add_patch(Ellipse(centro, largura, altura, angle=angulo,
                                          ec=cor, fc='none', ls='--', lw=1.6))
                     ax.plot(centro[0], centro[1], marker='x',
@@ -1692,7 +1693,7 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
     ]
     if op.get('mostrar_gaussianas', True):
         legenda.extend(Line2D([0], [0],
-                       color=plt.get_cmap('tab10')(k % 10), ls='--', lw=1.8,
+                       color=cor_gaussiana(int(k)), ls='--', lw=1.8,
                        label=f'{nome} — seção 95%')
                        for k, nome in enumerate(gm.saidas_))
 

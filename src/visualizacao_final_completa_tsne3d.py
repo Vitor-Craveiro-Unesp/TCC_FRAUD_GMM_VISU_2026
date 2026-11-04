@@ -127,7 +127,7 @@ def _fontes(pasta_experimento):
     gamma = pacote.gmm.responsabilidades(z)
     from src.probabilidade import calcular_probabilidades
     scores_conferidos = np.asarray(calcular_probabilidades(gamma, pacote.risco.riscos_), dtype=np.float64)
-    exigir(isinstance(gamma, pd.DataFrame) and gamma.shape == (len(y), 4)
+    exigir(isinstance(gamma, pd.DataFrame) and gamma.shape == (len(y), int(getattr(pacote.gmm.modelo_, 'n_components', len(pacote.risco.riscos_))))
            and np.isfinite(gamma.to_numpy(dtype=np.float64)).all()
            and scores_conferidos.shape == p.shape
            and np.max(np.abs(scores_conferidos - p)) <= 1e-6

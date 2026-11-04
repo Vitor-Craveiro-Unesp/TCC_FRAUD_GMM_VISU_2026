@@ -11,6 +11,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, to_rgb
+from src.cores_gaussianas import cor_gaussiana
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
@@ -34,8 +35,7 @@ def calcular_dominancia(gmm, coordenadas):
 
 
 def _cores(k):
-    tab = plt.get_cmap('tab10')
-    cores = [tab(i % 10) for i in range(k)]
+    cores = [cor_gaussiana(i) for i in range(k)]
     suaves = [tuple(.52 + .48*np.asarray(to_rgb(c))) for c in cores]
     return cores, ListedColormap(suaves)
 

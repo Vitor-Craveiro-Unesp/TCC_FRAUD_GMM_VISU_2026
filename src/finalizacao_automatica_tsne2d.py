@@ -21,31 +21,9 @@ from src.finalizacao_controlada_tsne import executar_ajuste_final_tsne_em_memori
 from src.avaliacao_final_tsne import avaliar_f10_em_memoria
 
 def validar_automacao(config: dict) -> bool:
-    """Valida sem abrir dados nem criar saidas; permissao exclusiva TSNE 2D."""
-    fracao_amostra_f10(config)
-    if str(config.get('reducao', {}).get('metodo', '')).upper() != 'TSNE':
-        raise ValueError('Finalizador t-SNE 2D nao aceita PCA.')
-    dimensao = config.get('tsne', {}).get('n_components')
-    if dimensao not in (2, [2]):
-        raise ValueError('Finalizador t-SNE 2D aceita somente dimensao 2; t-SNE 3D ainda nao integrado.')
-    fracao = config.get('dados', {}).get('fracao_base')
-    if type(fracao) not in (int, float) or float(fracao) not in (0.01, 0.03, 0.1):
-        raise ValueError('Finalizacao aceita desenvolvimento 1%, 3% ou 10%.')
-    if (config.get('divisao', {}).get('total_folds') != 10 or
-            config['divisao'].get('qual_fold_teste') != 10 or
-            config['divisao'].get('quantidade_folds_teste') != 1):
-        raise ValueError('O F10 deve permanecer o unico fold de teste.')
-    gmm = config.get('gmm', {})
-    k = gmm.get('n_components')
-    if k not in ([4], 4) or gmm.get('n_init') != 5 or str(gmm.get('covariance_type', '')).lower() != 'full':
-        raise ValueError('Requer GMM K4 FULL n_init5.')
-    am = config.get('amostragem', {})
-    if am.get('modo') != 'RUS' or am.get('razao_negativos_positivos') != 16:
-        raise ValueError('Requer RUS 16:1.')
-    if config.get('experimento', {}).get('semente') != 42:
-        raise ValueError('Requer seed42.')
-    if config.get('execucao', {}).get('proteger_resultados') is not True:
-        raise ValueError('Protecao de resultados obrigatoria.')
+    """Validacao cientifica antes de abrir o dataset ou iniciar ajustes."""
+    from src.contrato_finalizacao_dinamica import validar_configuracao_finalizacao
+    validar_configuracao_finalizacao(config, metodo='TSNE', dimensao=2)
     return True
 
 
@@ -185,7 +163,7 @@ def _concluir_ensaio_sem_lock(pasta_experimento: str | Path, *, raiz: str | Path
     with (teste/'indices_f10_amostra.npy').open('xb') as f:
         np.save(f, ids_f10, allow_pickle=False)
     _salvar_json_novo(teste/'manifesto_amostra_f10.json', {
-        'fracao_dentro_fold_f10': fracao_f10, 'semente': 42,
+        'fracao_dentro_fold_f10': fracao_f10, 'semente': pre.configuracao['experimento']['semente'],
         'n': len(ids_f10), 'n_fraudes': int(y[ids_f10].sum()),
         'sha256_indices': sha256(ids_f10.tobytes()).hexdigest(),
         'metodo': 'TSNE', 'dimensao': 2, 'reutilizacao_f10': 'exploratorio',

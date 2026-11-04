@@ -25,9 +25,9 @@ salvar_json_novo = comum.salvar_json_novo
 
 
 def validar_automacao(config):
-    exigir(comum.parametros_ok(config),
-           'PCA 2D exige fracao=0.01, 0.03 ou 0.1; GMM K4, n_init5, FULL, RUS16, seed42 e F10 reservado.')
-    exigir(config.get('pca', {}).get('n_components') == [2],
+    from src.contrato_finalizacao_dinamica import validar_configuracao_finalizacao
+    validar_configuracao_finalizacao(config,metodo='PCA',dimensao=2)
+    exigir(config.get('pca', {}).get('n_components') in ([2], 2),
            'Automacao PCA 2D exige pca.n_components: [2].')
     for arq in ('src/finalizacao_automatica_pca1d.py',
                 'src/treinamento_final_pca.py', 'src/avaliacao_final_pca.py',
@@ -50,9 +50,10 @@ def conferir_oof(folder):
     exigir(m.get('status')=='concluido_06_03' and int(m.get('registros_desenvolvimento',-1))>0,
            'OOF PCA 2D nao concluido.')
     e=esc['configuracao']
-    exigir(e['reducao']['n_components']==2 and e['gmm']['n_init']==5
-           and e['gmm']['n_components']==4 and esc['teste_final_usado'] is False,
-           'Vencedor OOF nao corresponde ao PCA 2D/K4/n_init5.')
+    from src.contrato_finalizacao_dinamica import validar_vencedor
+    validar_vencedor(c, esc, metodo='PCA', dimensao=2)
+    exigir(e['reducao']['n_components']==2 and esc['teste_final_usado'] is False,
+           'Vencedor OOF nao corresponde ao PCA 2D.')
     with np.load(folder/'vencedor/oof/predicoes.npz',allow_pickle=False) as z:
         ids=np.asarray(z['linha_original'], dtype=np.int64)
         folds=np.asarray(z['fold'],dtype=np.uint8)
@@ -82,7 +83,8 @@ def gerar_pre01_oof(folder,state):
     df=orq._ler_desenvolvimento(state['parquet'],state['ids'])
     X=prep.selecionar_features(df,state['config'])
     summary,detail,folds_df,pca=pre.calc(X,state['folds'],state['config'])
-    meta={'tipo':'ensaio','k':4,'n_init':5,'total_observacoes':int(len(X)),
+    meta={'tipo':'ensaio','k':state['escolha']['configuracao']['gmm']['n_components'],
+          'n_init':state['escolha']['configuracao']['gmm']['n_init'],'total_observacoes':int(len(X)),
           'total_features':len(summary),'f10_usado':False,
           'mesmos_registros_e_folds':True,
           'experimentos':{'2D':folder.relative_to(ROOT).as_posix()},
@@ -346,7 +348,7 @@ def galeria_final(folder,ids,pacote,met):
 <title>PCA 2D F10 — galeria completa</title><style>body{{font:15px system-ui,sans-serif;background:#f5f7fa;color:#172236;max-width:1400px;margin:auto;padding:20px}}
 .grade{{display:grid;grid-template-columns:repeat(auto-fit,minmax(315px,1fr));gap:16px}}article{{background:#fff;border:1px solid #dae1e9;border-radius:10px;padding:12px;box-shadow:0 2px 8px #0001}}article img{{width:100%;aspect-ratio:4/3;object-fit:contain}}
 a{{color:#285783;text-decoration:none}}article p{{font-weight:600}}.aviso{{background:#e8edf4;border-left:4px solid #355877;padding:14px}}.links{{display:flex;gap:16px;flex-wrap:wrap}}</style></head><body>
-<h1>PCA 2D / GMM K4 n_init5 — Teste final F10</h1><p class="aviso">Amostra F10 de {len(ids)} observações, {comum.fracao_amostra_f10(pacote.configuracao):.2%} do fold, EXPLORATÓRIO repetido. F10 não é nova validação independente. τ* = {pacote.limiar_oof:.17g}, escolhido em OOF F1–F9. Modelo, encoder, scaler e PCA congelados.</p>
+<h1>PCA 2D / GMM K{pacote.gmm.modelo_.n_components} n_init{pacote.gmm.parametros["n_init"]} — Teste final F10</h1><p class="aviso">Amostra F10 de {len(ids)} observações, {comum.fracao_amostra_f10(pacote.configuracao):.2%} do fold, EXPLORATÓRIO repetido. F10 não é nova validação independente. τ* = {pacote.limiar_oof:.17g}, escolhido em OOF F1–F9. Modelo, encoder, scaler e PCA congelados.</p>
 <p>F10: AP={met['ap']:.7f} | MCC em τ*={met['mcc_limiar_oof']:.7f} | LogLoss={met['logloss']:.7f} | Score={met['score_composto_limiar_oof']:.7f}</p>
 <p><a href="../../visualizacao/galeria/index.html">Galeria OOF</a> · <a href="../{pre}">PRE01 F10 interativo</a></p>
 <div class="grade">{cards}</div><h2>Resultados e proveniência</h2><div class="links">{links}</div></body></html>'''

@@ -15,6 +15,7 @@ from pathlib import Path
 import platform
 import shutil
 import sys
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -242,19 +243,21 @@ def _chave_execucao(config, hash_dados, hash_folds, *, ensaio, por_fold):
                    'versao_passo':'06.03.2-layout2'})
 
 
-def _abrir_execucao(raiz, config, chave, *, ensaio):
+def _abrir_execucao(raiz, config, chave, *, ensaio, nova_execucao=False, retomar_explicito=None):
     out = raiz / config['saidas']['diretorio_base']
     out.mkdir(parents=True,exist_ok=True)
     prefixo = 'ensaio' if ensaio or float(config['dados']['fracao_base']) < 1 else 'experimento'
     metodo = config['reducao']['metodo'].lower()
     ex = config['execucao']
-    explicito = ex['diretorio_retomada']
+    explicito = retomar_explicito if retomar_explicito is not None else ex['diretorio_retomada']
+    if nova_execucao:
+        explicito = None
     if explicito is not None:
         caminho = Path(explicito)
         if not caminho.is_absolute(): caminho = raiz/caminho
         if not caminho.is_dir(): raise FileNotFoundError(f'Diretorio_retomada nao encontrado: {caminho}')
         candidatos = [caminho]
-    elif ex['retomar']:
+    elif ex['retomar'] and not nova_execucao:
         candidatos=[]
         for d in out.glob(f'em_andamento_{prefixo}_{metodo}_gmm_*'):
             m = d / 'manifesto.json'
@@ -273,7 +276,8 @@ def _abrir_execucao(raiz, config, chave, *, ensaio):
     inicio = _agora(config).strftime('%Y%m%d_%H%M%S')
     pasta = out/f'em_andamento_{prefixo}_{metodo}_gmm_{inicio}'
     if pasta.exists():
-        raise FileExistsError(f'Pasta ja existe (protegida): {pasta}')
+        # Dois inicios no mesmo segundo nao podem disputar a mesma pasta.
+        pasta = out / f'em_andamento_{prefixo}_{metodo}_gmm_{inicio}_{uuid4().hex[:8]}'
     pasta.mkdir()
     (pasta/'candidatos').mkdir()
     layout.metricas_vencedor(pasta).mkdir(parents=True)
@@ -300,7 +304,9 @@ def _finalizar(pasta, manifest, config):
     base=f'{tipo}_{metodo}_gmm_{fim}'
     destino = pasta.parent/base
     if destino.exists():
-        raise FileExistsError(f'Pasta final ja existe: {destino}')
+        destino = pasta.parent / f'{base}_{uuid4().hex[:8]}'
+        if destino.exists():
+            raise FileExistsError(f'Pasta final ja existe: {destino}')
     # Gravacao primeiro, rename apenas depois de tudo concluir.
     manifest.update(status='concluido_06_03',fim_local=agora.isoformat())
     _salvar_json(pasta/'manifesto.json',manifest)
@@ -517,8 +523,15 @@ def main(argv=None, *, raiz=None):
     modos.add_argument('--concluir-galeria-f10',action='store_true',help='Somente t-SNE 1D/2D/3D: concluir galeria F10 sem repetir ajuste ou inferencia.')
     parser.add_argument('--por-fold',type=int,default=300,help='Linhas por fold em --ensaio (>=4).')
     parser.add_argument('--experimento',type=Path,help='Pasta concluida, exigida em --so-visualizacoes.')
+    parser.add_argument('--config',type=Path,help='YAML de entrada; padrao: arquivo editavel na raiz.')
+    parser.add_argument('--nova-execucao',action='store_true',help='Ignora descoberta automatica de retomada; nao sobrescreve pastas.')
+    parser.add_argument('--retomar-execucao',type=Path,help='Pasta em_andamento escolhida explicitamente para retomada.')
     a=parser.parse_args(argv)
     if a.por_fold < 4: parser.error('--por-fold precisa ser >=4.')
+    if a.nova_execucao and a.retomar_execucao is not None:
+        parser.error('--nova-execucao e --retomar-execucao sao exclusivos.')
+    if (a.nova_execucao or a.retomar_execucao is not None) and not (a.executar or a.ensaio):
+        parser.error('Controle de nova execucao/retomada exige --executar ou --ensaio.')
     raiz=Path(raiz) if raiz else Path(__file__).resolve().parents[1]
     if a.concluir_galeria_f10:
         if a.experimento is None:parser.error('--concluir-galeria-f10 exige --experimento.')
@@ -576,10 +589,15 @@ def main(argv=None, *, raiz=None):
         if a.experimento is None:parser.error('--so-visualizacoes requer --experimento.')
         executar_visualizacoes(raiz/a.experimento if not a.experimento.is_absolute() else a.experimento)
         return None
-    arquivo_yaml=raiz/ARQUIVO_CONFIG
+    arquivo_yaml=(raiz / a.config if a.config is not None and not a.config.is_absolute()
+                  else a.config if a.config is not None else raiz / ARQUIVO_CONFIG)
     yaml_bytes=arquivo_yaml.read_bytes()
     config=yaml.safe_load(yaml_bytes.decode('utf-8-sig'))
     validar_operacao(config)
+    if a.nova_execucao and config['execucao'].get('diretorio_retomada') is not None:
+        parser.error('--nova-execucao exige execucao.diretorio_retomada: null.')
+    if a.retomar_execucao is not None and not config['execucao']['retomar']:
+        parser.error('--retomar-execucao exige execucao.retomar: true no YAML da execucao.')
     # GUARDA_LAYOUT_TSNE_YAML_V1_20261103 / CLI novo YAML
     from src.garantia_layout_tsne import verificar_layout_tsne
     verificar_layout_tsne(config, fase='YAML_novo')
@@ -638,8 +656,14 @@ def main(argv=None, *, raiz=None):
         raise RuntimeError('Ordem de registros Parquet diferente da divisao de folds.')
     del y_original
     folds_dev=folds_orig[linhas]
+    if automatizar_f10 and a.executar:
+        from src.contrato_finalizacao_dinamica import validar_viabilidade_oof
+        validar_viabilidade_oof(folds_dev, df[config['dados']['coluna_alvo']].to_numpy(), config)
     chave=_chave_execucao(config,hash_dados,hash_arquivo(arquivo_folds),ensaio=a.ensaio,por_fold=a.por_fold)
-    pasta,manifest,retomada=_abrir_execucao(raiz,config,chave,ensaio=a.ensaio)
+    pasta,manifest,retomada=_abrir_execucao(raiz,config,chave,ensaio=a.ensaio,
+        nova_execucao=a.nova_execucao,retomar_explicito=a.retomar_execucao)
+    if a.retomar_execucao is not None and manifest.get('sha256_yaml') != sha256(yaml_bytes).hexdigest():
+        raise RuntimeError('Retomada: SHA-256 do YAML original difere do manifesto; use o snapshot da submissao original.')
     manifest.update(sha256_parquet=hash_dados,sha256_folds=hash_arquivo(arquivo_folds),
                     sha256_yaml=sha256(yaml_bytes).hexdigest(),
                     registros_desenvolvimento=int(len(df)),registros_reservados_f10=int((folds_orig==10).sum()),
@@ -656,7 +680,8 @@ def main(argv=None, *, raiz=None):
     # Executa UM fold/candidato por vez; controla threads numericas com n_jobs.
     from threadpoolctl import threadpool_limits
     jobs=config['execucao']['n_jobs']
-    n_threads=(os.cpu_count() or 1) if jobs==-1 else jobs
+    from src.recursos_cluster import n_jobs_efetivo
+    n_threads=n_jobs_efetivo(jobs)
     with threadpool_limits(limits=n_threads):
         executar_grade(df,folds_dev,linhas,folds_orig,config,pasta,manifest,ensaio=a.ensaio)
     final=_finalizar(pasta,manifest,config)

@@ -69,10 +69,10 @@ def _dados_validos(coordenadas, classe_real, *, scores=None, limiar_oof=None,
     gamma = None
     if responsabilidades is not None:
         gamma = np.asarray(responsabilidades, dtype=float)
-        _exigir(gamma.ndim == 2 and gamma.shape == (n, 4)
+        _exigir(gamma.ndim == 2 and gamma.shape[0] == n and gamma.shape[1] >= 1
                 and np.isfinite(gamma).all() and (gamma >= 0).all()
                 and np.allclose(gamma.sum(axis=1), 1, atol=1e-5, rtol=1e-5),
-                'Responsabilidades exigem matriz (n,4) nao negativa, somando 1.')
+                'Responsabilidades exigem matriz (n,K), K>=1, nao negativa, somando 1.')
     if linha_original is None and 'linha_original' in coordenadas.columns:
         linha_original = coordenadas['linha_original']
     if linha_original is None:
@@ -181,12 +181,14 @@ def _figura_html(z, y, p, tau, gamma, ids, *, origem, fracao_f10, tipo_id):
 
     if gamma is not None:
         palette = ['#8e44ad', '#e67e22', '#16a085', '#e74c3c']
+        # Preserva as quatro cores historicas; K maiores usam HSL deterministico.
         dominante = np.argmax(gamma, axis=1)
         indices = []
-        for k in range(4):
+        for k in range(gamma.shape[1]):
+            cor = palette[k] if k < len(palette) else f'hsl({int((k*137.508)%360)}, 72%, 40%)'
             grupo = np.flatnonzero(dominante == k)
             indice = adicionar(f'G{k + 1} dominante (n={len(grupo)})', grupo,
-                               cor=palette[k], tamanho=2.8, opacidade=.70)
+                               cor=cor, tamanho=2.8, opacidade=.70)
             if indice is not None:
                 indices.append(indice)
         modos.append(('Gaussiana dominante', indices))
@@ -295,6 +297,7 @@ def gerar_tsne13_3d(coordenadas: pd.DataFrame, classe_real, destino: str | Path,
             'n_total_entrada': int(len(y)), 'n_exibidos': int(len(idx)),
             'n_fraudes_entrada': int(y.sum()), 'n_fraudes_exibidas': int(yy.sum()),
             'semente_amostragem_visual': int(semente),
+            'gmm_n_components': None if gamma is None else int(gamma.shape[1]),
             'limiar_oof_congelado': tau,
             'modos_disponiveis': modos,
             'sha256_arquivos': hashes,

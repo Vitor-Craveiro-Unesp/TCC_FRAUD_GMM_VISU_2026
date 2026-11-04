@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+#SBATCH --job-name=tcc-gmm
+#SBATCH --output=outputs/logs/tcc_%j.out
+#SBATCH --error=outputs/logs/tcc_%j.err
+# Recursos --partition/--account/--time/--mem/--cpus-per-task ficam para a documentacao oficial.
+set -euo pipefail
+if [[ -z "${SLURM_SUBMIT_DIR:-}" ]]; then echo 'Execute este script via sbatch.' >&2; exit 2; fi
+cd "$SLURM_SUBMIT_DIR"
+if [[ -z "${TCC_CONFIG_SNAPSHOT:-}" || ! -f "$TCC_CONFIG_SNAPSHOT" ]]; then
+  echo 'Snapshot YAML da submissao nao encontrado.' >&2; exit 2
+fi
+if ! sha256sum --check --status "$(dirname "$TCC_CONFIG_SNAPSHOT")/sha256.txt"; then
+  echo 'Hash SHA-256 do snapshot YAML divergente.' >&2; exit 2
+fi
+if [[ -z "${SLURM_CPUS_PER_TASK:-}" ]]; then
+  echo 'Informe --cpus-per-task segundo as regras oficiais do cluster.' >&2; exit 2
+fi
+VENV="${TCC_VENV_DIR:-$PWD/.venv}"
+if [[ ! -f "$VENV/bin/activate" ]]; then
+  echo "Ambiente virtual Python nao encontrado: $VENV/bin/activate" >&2; exit 2
+fi
+# Respeita a quantidade de CPUs efetivamente concedida ao job.
+export OMP_NUM_THREADS="$SLURM_CPUS_PER_TASK"
+export OPENBLAS_NUM_THREADS="$SLURM_CPUS_PER_TASK"
+export MKL_NUM_THREADS="$SLURM_CPUS_PER_TASK"
+export VECLIB_MAXIMUM_THREADS="$SLURM_CPUS_PER_TASK"
+export BLIS_NUM_THREADS="$SLURM_CPUS_PER_TASK"
+export NUMEXPR_NUM_THREADS="$SLURM_CPUS_PER_TASK"
+export MPLBACKEND=Agg
+source "$VENV/bin/activate"
+if [[ -n "${TCC_RETOMAR_EXPERIMENTO:-}" ]]; then
+  python -u -m src.execucao_controlada --retomar \
+    --config "$TCC_CONFIG_SNAPSHOT" --experimento "$TCC_RETOMAR_EXPERIMENTO"
+else
+  python -u -m src.execucao_controlada --executar --config "$TCC_CONFIG_SNAPSHOT"
+fi

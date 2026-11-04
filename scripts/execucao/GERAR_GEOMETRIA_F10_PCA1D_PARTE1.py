@@ -163,7 +163,8 @@ def preparar_dados_figuras(pacote, estado: dict) -> dict:
            np.isfinite(g).all() and np.allclose(g.sum(axis=1), 1, atol=1e-6),
            'Responsabilidades gaussianas invalidas.')
     cols = list(pacote.gmm.saidas_)
-    exigir(len(cols) == g.shape[1] == 4, 'GMM esperado com K=4.')
+    k = int(pacote.escolha_oof['configuracao']['gmm']['n_components'])
+    exigir(len(cols) == g.shape[1] == k, 'GMM divergente do K vencedor OOF.')
     gamma = pd.DataFrame(g, columns=cols)
     return {'coord': coords, 'y': estado['preds']['y_true'].to_numpy(dtype=np.uint8),
             'scores': estado['preds']['prob_fraude'].to_numpy(dtype=float),

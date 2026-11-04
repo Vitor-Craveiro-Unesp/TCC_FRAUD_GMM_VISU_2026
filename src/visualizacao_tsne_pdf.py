@@ -10,6 +10,7 @@ from time import perf_counter
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from src.cores_gaussianas import cor_gaussiana
 import numpy as np
 import pandas as pd
 from matplotlib.lines import Line2D
@@ -93,7 +94,7 @@ def projecao_3d(config, data, dest, ext, dpi, csv, op, *, origem='desenvolviment
         for k in np.unique(grupos[indices]):
             ix = indices[grupos[indices] == k]
             ax.scatter(Z[ix, 0], Z[ix, 1], Z[ix, 2],
-                       color=plt.get_cmap('tab10')(int(k) % 10),
+                       color=cor_gaussiana(int(k)),
                        s=16, alpha=.66, depthshade=False, rasterized=True,
                        label=f'G{k+1} — maior responsabilidade (n={len(ix)})')
     ax.set_xlabel('t-SNE 1', labelpad=11)

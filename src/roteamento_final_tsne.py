@@ -59,12 +59,11 @@ def planejar_finalizacao_tsne(config: dict, escolha_oof: dict) -> PlanoFinalizac
     dimensao = reducao.get("n_components")
     if type(dimensao) is not int or dimensao not in (1, 2, 3):
         raise ValueError("Dimensao TSNE deve ser 1, 2 ou 3.")
-    gmm = candidato.get("gmm", {})
-    if (gmm.get("n_components") != 4 or gmm.get("covariance_type") != "full"
-            or gmm.get("n_init") != 5):
-        raise ValueError("GMM precisa preservar K=4, FULL, n_init=5.")
-    if candidato.get("modo") != "RUS" or candidato.get("razao") != 16:
-        raise ValueError("Candidato precisa preservar RUS 16:1.")
+    from src.contrato_finalizacao_dinamica import validar_configuracao_finalizacao
+    # A rota so planeja e nunca abre F10 ou persiste resultados. Ela aceita
+    # identificadores sinteticos em testes isolados; a ponte oficial OOF
+    # verifica o hash canonico e a identidade do vencedor antes do refit.
+    validar_configuracao_finalizacao(config, metodo='TSNE', dimensao=dimensao)
 
     return PlanoFinalizacaoTSNE(
         metodo="TSNE",

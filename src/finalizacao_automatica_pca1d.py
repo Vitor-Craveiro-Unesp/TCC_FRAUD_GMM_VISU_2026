@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Finalizacao automatica PCA1D para o CLI original `python -m src.orquestracao_oof --executar`.
 
-PCA 1D, K4, n_init5, RUS16; desenvolvimento em 1%, 3% ou 10%; F10 controlado pelo YAML.
+PCA 1D com K, n_init, razao e fracoes definidos no YAML congelado.
 F10 foi previamente acessado neste projeto: execucoes repetidas sao EXPLORATORIAS.
 Nunca utiliza F10 para escolher candidato, ajustar PCA/GMM ou otimizar tau.
 Nao e uma CLI; chamada exclusivamente pelo orquestrador original apos OOF + galeria.
@@ -57,20 +57,12 @@ def salvar_json_novo(path, obj):
 
 
 def parametros_ok(c):
-    unico = lambda a: a[0] if isinstance(a, list) and len(a)==1 else a
-    fracao_amostra_f10(c)
-    return (float(c['dados']['fracao_base']) in (0.01, 0.03, 0.1)
-            and c['reducao']['metodo'].upper() == 'PCA'
-            and int(unico(c['gmm']['n_components'])) == 4
-            and int(c['gmm']['n_init']) == 5
-            and c['gmm']['covariance_type'].lower() == 'full'
-            and c['amostragem']['modo'].upper() == 'RUS'
-            and int(c['amostragem']['razao_negativos_positivos']) == 16
-            and int(c['experimento']['semente']) == 42
-            and int(c['divisao']['qual_fold_teste']) == 10
-            and c['execucao']['proteger_resultados'] is True)
-
-
+    try:
+        from src.contrato_finalizacao_dinamica import validar_configuracao_finalizacao
+        validar_configuracao_finalizacao(c, metodo='PCA')
+        return True
+    except (ValueError, TypeError, KeyError):
+        return False
 
 
 @contextmanager
@@ -93,13 +85,11 @@ def conferir_oof(folder):
     m = ler_json(folder/'manifesto.json')
     esc = ler_json(folder/'vencedor/metricas/melhor_configuracao.json')
     c = yaml.safe_load((folder/'configuracao.yaml').read_text(encoding='utf-8-sig'))
-    exigir(parametros_ok(c) and c['pca']['n_components']==[1], 'OOF nao corresponde a PCA1D K4 nas fracoes 1%, 3% ou 10%.')
+    from src.contrato_finalizacao_dinamica import validar_vencedor
+    validar_vencedor(c,esc,metodo='PCA',dimensao=1)
     exigir(m.get('status')=='concluido_06_03' and int(m.get('registros_desenvolvimento',-1))>0,
            'OOF nao concluido ou sem registros de desenvolvimento.')
-    exigir(esc['configuracao']['reducao']['n_components']==1
-           and esc['configuracao']['gmm']['n_init']==5
-           and esc['configuracao']['gmm']['n_components']==4
-           and esc['teste_final_usado'] is False,
+    exigir(esc['configuracao']['reducao']['n_components']==1 and esc['teste_final_usado'] is False,
            'Escolha OOF incompativel.')
     arq=folder/'vencedor/oof/predicoes.npz'
     with np.load(arq, allow_pickle=False) as z:
@@ -135,7 +125,8 @@ def gerar_pre01_oof(folder, state):
     X=prep.selecionar_features(df,state['config'])
     print('[OOF PRE01] Calculando diagnostico completo F1..F9...',flush=True)
     summary,detail,folds_df,pca=pre.calc(X,state['folds'],state['config'])
-    meta={'tipo':'ensaio','k':4,'n_init':5,'total_observacoes':int(len(X)),
+    meta={'tipo':'ensaio','k':state['escolha']['configuracao']['gmm']['n_components'],
+          'n_init':state['escolha']['configuracao']['gmm']['n_init'],'total_observacoes':int(len(X)),
           'total_features':int(len(summary)),'f10_usado':False,
           'mesmos_registros_e_folds':True,
           'experimentos':{'1D':folder.relative_to(ROOT).as_posix()},
@@ -177,7 +168,8 @@ def treinar_final(folder, state):
           'sha256_yaml':m['sha256_yaml'],
           'experimento_oof':folder.relative_to(ROOT).as_posix(),
           'sha256_predicoes_oof':sha(folder/'vencedor/oof/predicoes.npz')}
-    print('[FINAL F1..F9] Ajustando unico GMM PCA 1D K4 n_init5...',flush=True)
+    g=state['escolha']['configuracao']['gmm']
+    print(f'[FINAL F1..F9] Ajustando GMM PCA 1D K={g["n_components"]} n_init={g["n_init"]}...',flush=True)
     pacote=ajustar_final_f1_f9(df,state['folds'],state['config'],state['escolha'],prov,
                                registrar_historico_em=True)
     caminho, manifest=salvar_pacote(pacote, modelo_dir)
@@ -212,7 +204,7 @@ def avaliar_f10(folder, state, pacote, ids):
            'F10 desta nova execucao ja foi salvo. Nao repetir.')
     exigir(np.all(state['orig_folds'][ids]==10),'Amostra inclui indices que nao sao F10.')
     frac = fracao_amostra_f10(state['config'])
-    print(f'[F10] Avaliacao EXPLORATORIA em {len(ids)} linhas F10 (fold 10; seed 42; {frac:.2%} estratificado).',flush=True)
+    print(f'[F10] Avaliacao EXPLORATORIA em {len(ids)} linhas F10 (fold 10; seed {state["config"]["experimento"]["semente"]}; {frac:.2%} estratificado).',flush=True)
     df=ler_linhas_f10(state['parquet'],ids)
     tab,metricas=avaliar_f10_em_memoria(pacote,df,state['orig_folds'][ids],ids)
     exigir(metricas['limiar_otimizado_no_f10'] is False
@@ -223,7 +215,7 @@ def avaliar_f10(folder, state, pacote, ids):
         tab.to_csv(f,index=False,float_format='%.17g')
     salvar_json_novo(dest/'metricas_f10.json',metricas)
     np.save(dest/'indices_f10_amostra.npy',ids,allow_pickle=False)
-    salvar_json_novo(dest/'manifesto_amostra_f10.json', {'fracao':frac,'semente':42,'n':len(ids),
+    salvar_json_novo(dest/'manifesto_amostra_f10.json', {'fracao':frac,'semente':state['config']['experimento']['semente'],'n':len(ids),
         'sha256_indices':sha256(ids.tobytes()).hexdigest(),
         'origem':'F10 da base/folds congelados do proprio experimento',
         'classe':'AMOSTRAL_EXPLORATORIO_REPETIDO',
@@ -461,7 +453,7 @@ def galeria_final(folder,ids,pacote,met):
     html=f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Teste completo PCA 1D — F10 exploratorio</title><style>body{{font:15px system-ui,sans-serif;background:#f5f7fa;color:#172236;max-width:1400px;margin:auto;padding:20px}}
 .grade{{display:grid;grid-template-columns:repeat(auto-fit,minmax(315px,1fr));gap:16px}}article{{background:white;border:1px solid #dae1e9;border-radius:10px;padding:12px;box-shadow:0 2px 8px #0001}}article img{{width:100%;aspect-ratio:4/3;object-fit:contain}}a{{color:#285783;text-decoration:none}}article p{{font-weight:600}}.aviso{{background:#e8edf4;border-left:4px solid #355877;padding:14px}}.links{{display:flex;gap:16px;flex-wrap:wrap}}</style></head><body>
-<h1>TESTE COMPLETO — PCA 1D / GMM K4 n_init5</h1>
+<h1>TESTE COMPLETO — PCA 1D / GMM K{pacote.gmm.modelo_.n_components} n_init{pacote.gmm.parametros["n_init"]}</h1>
 <p class="aviso">Execucao de {100 * float(pacote.configuracao['dados']['fracao_base']):g}% F1–F9 e {fracao_amostra_f10(pacote.configuracao):.2%} do F10 ({len(ids)} registros de teste). Resultados exploratorios: <b>F10 reutilizado, nao e teste independente inedito</b>. τ* OOF congelado = {pacote.limiar_oof:.17g}. As assinaturas decorativas foram omitidas dos novos PNGs; o carater exploratorio continua documentado aqui e nos manifestos.</p>
 <p>F10: AP={met['ap']:.7f} | MCC em τ*={met['mcc_limiar_oof']:.7f} | LogLoss={met['logloss']:.7f} | Score={met['score_composto_limiar_oof']:.7f}</p>
 <p><a href="../../visualizacao/galeria/index.html">Abrir galeria OOF completa</a> · <a href="../{pre}">Abrir PRE01 F10 interativo</a></p>
@@ -490,10 +482,8 @@ def galeria_final(folder,ids,pacote,met):
 
 def validar_automacao(config):
     """Falha antes do OOF quando a automacao solicitada nao e suportada."""
-    exigir(parametros_ok(config),
-           'Finalizacao automatica PCA1D exige fracao=0.01, 0.03 ou 0.1; K4, n_init5, FULL, RUS16, seed42 e F10 reservado.')
-    exigir(config.get('pca',{}).get('n_components') == [1],
-           'Finalizacao automatica V1: apenas PCA 1D. Desative execucao.finalizacao_pca1d_automatica em 2D/3D.')
+    from src.contrato_finalizacao_dinamica import validar_configuracao_finalizacao
+    validar_configuracao_finalizacao(config,metodo='PCA',dimensao=1)
     for rel in ('src/treinamento_final_pca.py','src/avaliacao_final_pca.py',
                 'src/pre01_v2_diagnostico.py','src/visualizacao_geometrica.py',
                 'src/visualizacao_oof.py', 'src/visualizacao_gmm01.py',
@@ -530,7 +520,7 @@ def selecionar_amostra_f10(state, folder):
     exigir(y.shape == folds.shape, 'Folds e TARGET com dimensoes distintas.')
     ids = selecionar_f10_estratificado(folds, y, state['config'])
     print(f'[F10] Amostra estratificada fixa: {len(ids)} linhas; fraude={int(y[ids].sum())}; '
-          f'seed 42; fracao {fracao:.2%} do proprio F10. F10 ja foi acessado no projeto.',flush=True)
+          f'seed {state["config"]["experimento"]["semente"]}; fracao {fracao:.2%} do proprio F10. F10 ja foi acessado no projeto.',flush=True)
     return ids
 
 

@@ -11,6 +11,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy.stats import norm, multivariate_normal
+from src.cores_gaussianas import cor_gaussiana
 
 
 def calcular_marginal(gmm, j: int, eixo: np.ndarray):
@@ -125,7 +126,7 @@ def gerar(config, data, destino, ext, dpi, csv):
 
         fig, ax = plt.subplots(figsize=(10.8, 6.9))
 
-        cores = plt.get_cmap('tab10')
+        cores = cor_gaussiana
 
         # Componentes gaussianas
         for k, nome_gaussiana in enumerate(gm.saidas_):
@@ -134,7 +135,7 @@ def gerar(config, data, destino, ext, dpi, csv):
                 componentes[k],
                 ls='--',
                 lw=1.7,
-                color=cores(k % 10),
+                color=cores(k),
                 label=f'{nome_gaussiana} (π={pesos[k]:.7f})',
                 alpha=.82
             )
@@ -266,7 +267,7 @@ def gerar(config, data, destino, ext, dpi, csv):
         )
 
         fig, ax = plt.subplots(figsize=(10.6, 8.2))
-        cores = plt.get_cmap('tab10')
+        cores = cor_gaussiana
 
         # Fundo: densidade total da mistura
         cf = ax.contourf(
@@ -295,7 +296,7 @@ def gerar(config, data, destino, ext, dpi, csv):
                 yy,
                 contribs_2d[k],
                 levels=4,
-                colors=[cores(k % 10)],
+                colors=[cores(k)],
                 linestyles='--',
                 linewidths=1.35,
                 alpha=.95
@@ -304,7 +305,7 @@ def gerar(config, data, destino, ext, dpi, csv):
             ax.scatter(
                 gm.modelo_.means_[k, 0],
                 gm.modelo_.means_[k, 1],
-                color=cores(k % 10),
+                color=cores(k),
                 marker='x',
                 s=72,
                 linewidths=2.0,
@@ -411,7 +412,7 @@ def gerar(config, data, destino, ext, dpi, csv):
             np.sin(angulos)
         ])
 
-        cores3d = plt.get_cmap('tab10')
+        cores3d = cor_gaussiana
         legenda3d = []
 
         for k, nome_gaussiana in enumerate(gm.saidas_):
@@ -439,7 +440,7 @@ def gerar(config, data, destino, ext, dpi, csv):
                 @ (raio95 * circunferencia)
             ).T
 
-            cor = cores3d(k % 10)
+            cor = cores3d(k)
 
             # Projecao da elipse no plano Z=0
             ax3d.plot(
