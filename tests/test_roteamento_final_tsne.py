@@ -91,19 +91,31 @@ def test_rejeita_candidato_fora_grade(caso):
         planejar_finalizacao_tsne(cfg, escolha)
 
 
-def test_rejeita_gmm_incompativel(caso):
+def test_aceita_k_dinamico_e_rejeita_vencedor_gmm_fora_grade(caso):
     cfg, escolha = caso
     cfg["gmm"]["n_components"] = [3]
     escolha["configuracao"] = next(grade_candidatos_oof(cfg))
-    with pytest.raises(ValueError, match="GMM precisa"):
+    plano = planejar_finalizacao_tsne(cfg, escolha)
+    assert plano.id_candidato_oof == escolha["id_candidato"]
+    assert escolha["configuracao"]["gmm"]["n_components"] == 3
+    # Um vencedor de K diferente do YAML congelado continua proibido.
+    escolha["configuracao"] = deepcopy(escolha["configuracao"])
+    escolha["configuracao"]["gmm"]["n_components"] = 4
+    with pytest.raises(ValueError, match="grade TSNE"):
         planejar_finalizacao_tsne(cfg, escolha)
 
 
-def test_rejeita_rus_incompativel(caso):
+def test_aceita_rus_dinamico_e_rejeita_vencedor_rus_fora_grade(caso):
     cfg, escolha = caso
     cfg["amostragem"]["razao_negativos_positivos"] = 15
     escolha["configuracao"] = next(grade_candidatos_oof(cfg))
-    with pytest.raises(ValueError, match="RUS 16"):
+    plano = planejar_finalizacao_tsne(cfg, escolha)
+    assert plano.fold_teste_reservado == 10
+    assert escolha["configuracao"]["razao"] == 15
+    # Alterar apenas o candidato depois da selecao torna-o incompativel.
+    escolha["configuracao"] = deepcopy(escolha["configuracao"])
+    escolha["configuracao"]["razao"] = 16
+    with pytest.raises(ValueError, match="grade TSNE"):
         planejar_finalizacao_tsne(cfg, escolha)
 
 

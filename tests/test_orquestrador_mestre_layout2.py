@@ -14,6 +14,14 @@ def _criar_experimento(tmp_path):
         'versao_layout':2,'visualizacoes':'pendentes',
         'pendente_em_outros_passos':['modelo_final_serializado','teste_F10'],
     }),encoding='utf-8')
+    # O contrato de visualizacao le o YAML congelado do experimento,
+    # nao o YAML editavel da raiz. A fixture precisa conter esse artefato.
+    import yaml
+    raiz = Path(__file__).resolve().parents[1]
+    cfg = yaml.safe_load((raiz/'config_TCC_EXPERIMENTAL_V3_atualizado.yaml').read_text(encoding='utf-8-sig'))
+    cfg['reducao']['metodo'] = 'PCA'
+    cfg['pca']['n_components'] = [2]
+    (p/'configuracao.yaml').write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding='utf-8')
     return p
 
 
@@ -89,6 +97,11 @@ def test_tres_candidatos_seleciona_score_e_isola_f10(monkeypatch,tmp_path):
         'config_TCC_EXPERIMENTAL_V3_atualizado.yaml').read_text(encoding='utf-8-sig'))
     # Grade artificial de tres candidatos, independente do YAML de producao.
     config['gmm']['n_components'] = [2, 4, 6]
+    # Isolar apenas a variacao de K; inicializacoes adicionais expandem a grade.
+    config['reducao']['metodo'] = 'TSNE'
+    config['tsne']['initialization'] = ['random']
+    # O teste tambem verifica cache de todos os 9 folds por candidato.
+    config['execucao']['usar_cache'] = True
     folds_orig=np.repeat(np.arange(1,11),6).astype(np.uint8)
     orig=np.flatnonzero(folds_orig!=10)
     fdev=folds_orig[orig]

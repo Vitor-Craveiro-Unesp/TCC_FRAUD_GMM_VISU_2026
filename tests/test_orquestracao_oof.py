@@ -26,6 +26,11 @@ def config():
     cfg['dados']['fracao_base']=1.0
     cfg['amostragem']['modo']='NORMAL'
     cfg['execucao']['n_jobs']=1
+    # Estes testes exercitam deliberadamente cache e retomada. Nao dependem
+    # dos valores operacionais editaveis no YAML principal do usuario.
+    cfg['execucao']['usar_cache']=True
+    cfg['execucao']['retomar']=True
+    cfg['execucao']['diretorio_retomada']=None
     return cfg
 
 @pytest.fixture
