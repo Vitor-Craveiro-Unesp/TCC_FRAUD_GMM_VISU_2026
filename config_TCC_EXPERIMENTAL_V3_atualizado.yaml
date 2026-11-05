@@ -8,12 +8,12 @@ dados:
   classe_positiva: 1
   coluna_id: NID_ALPHA
   colunas_excluir: []
-  fracao_base: 0.01
+  fracao_base: 1.0
 divisao:
   total_folds: 10
   quantidade_folds_teste: 1
   qual_fold_teste: 10
-  fracao_amostra_f10: 0.10
+  fracao_amostra_f10: 1.0
   estratificada: true
   embaralhar: true
 preprocessamento:
@@ -48,7 +48,7 @@ preprocessamento:
     tratamento: exigir_sufixo
   verificar_vazamento: true
 amostragem:
-  modo: RUS
+  modo: NORMAL
   razao_negativos_positivos: 16
   aplicar_somente_treino: true
   risco_historico:
@@ -64,11 +64,14 @@ pca:
   iterated_power: auto
 tsne:
   perplexity:
-  - 10
+  - 10  
+  - 100
+
   n_components: 3
   initialization:
-  - random
+
   - pca
+
   metric: euclidean
   learning_rate: auto
   early_exaggeration: 12.0
@@ -76,11 +79,13 @@ tsne:
   theta: 0.5
 gmm:
   n_components:
-  - 4
+  - 2
+  - 3
+
   covariance_type: full
   reg_covar: 1.0e-06
   max_iter: 300
-  n_init: 5
+  n_init: 3
   tol: 0.001
   init_params: kmeans
 risco_historico:
@@ -102,8 +107,8 @@ avaliacao:
 execucao:
   finalizacao_pca1d_automatica: true
   n_jobs: -1
-  usar_cache: false
-  retomar: false
+  usar_cache: true
+  retomar: true
   diretorio_retomada: null
   proteger_resultados: true
 saidas:

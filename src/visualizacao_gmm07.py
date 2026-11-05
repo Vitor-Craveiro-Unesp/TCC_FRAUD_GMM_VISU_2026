@@ -224,6 +224,8 @@ def _grafico(config, data, escolha, planos, medias_fixas, *, destino, ext, dpi,
 
 
 
+            # DIAGNOSTICO_INTERVALO_GMM07_GMM08_V1 GMM07 1D / 2D
+            geo._anotar_intervalo_malha(ax, campo, limiar)
             if not cruzou:
 
 
@@ -379,7 +381,10 @@ def _grafico(config, data, escolha, planos, medias_fixas, *, destino, ext, dpi,
 
 
 def gerar(config, data, escolha, destino, ext, dpi, csv, *, avaliacao):
-    """Renderiza exatamente uma figura comparativa com dois cortes por dimensão."""
+    # GMM_QUATRO_NIVEIS_F1F9_F10_V1
+    """Renderiza UM campo de risco F1-F9/F10, quatro niveis diagnosticados."""
+    from src.gmm_contornos_quatro_niveis import gerar as novo_gerador
+    return novo_gerador(config, data, escolha, destino, ext, dpi, csv, tipo='GMM07', avaliacao=avaliacao)
     op = config['visualizacao']['graficos']['sensibilidade_fronteira']
     tau = float(escolha['limiar_mcc_oof'])
     _rotulo_mcc(avaliacao)  # Impedir prévias que afirmem falsamente ser OOF.

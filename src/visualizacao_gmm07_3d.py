@@ -88,6 +88,8 @@ def _png(config, data, escolha, planos, medias, destino, ext, dpi, avaliacao,
                         transform=ax.transAxes,fontsize=8.4,
                         bbox=dict(facecolor='white',alpha=.92,
                                   edgecolor='#d9dee5',boxstyle='round,pad=.25'))
+            # DIAGNOSTICO_INTERVALO_GMM07_GMM08_V1 GMM07 PCA 3D
+            geo._anotar_intervalo_malha(ax, risco, limiar)
             ax.set_xlim(xx[0,0],xx[0,-1])
             ax.set_ylim(yy[0,0],yy[-1,0])
             ax.grid(alpha=.085)
@@ -316,7 +318,8 @@ window.addEventListener('beforeunload',stop);
         return f'{nome}: fronteira presente na malha'
     resumo = (explicar_limiar(0.5, 'Tau = 0,50') + ' | ' +
               explicar_limiar(tau, 'Tau* = ' + f'{tau:.7f}') +
-              f'. Faixa dos riscos: [{minimo_r:.7f}, {maximo_r:.7f}].')
+              f'. Faixa dos riscos: [{minimo_r:.7f}, {maximo_r:.7f}].'
+              f' Malha volumetrica s(x): [{vmin:.7f}, {vmax:.7f}].')
     html = html.replace('__STATUS_FRONTEIRAS__', escape(resumo))
 
     if any(marker in html for marker in ('__CHART__','__TRACE_INDEX__','__MCCFIX__')):

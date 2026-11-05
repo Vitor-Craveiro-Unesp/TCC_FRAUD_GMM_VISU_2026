@@ -1270,6 +1270,25 @@ def _faixa(v,margem):
     return mi-amp*margem, ma+amp*margem
 
 
+# DIAGNOSTICO_INTERVALO_GMM07_GMM08_V1
+# Usa os scores que JA existem; nao muda limiares nem preditor.
+def _anotar_intervalo_malha(ax, campo, limiar):
+    scores = np.asarray(campo, dtype=float)
+    if scores.size == 0 or not np.isfinite(scores).all():
+        raise ValueError('Malha de scores invalida.')
+    minimo, maximo = float(scores.min()), float(scores.max())
+    positivos = int(np.count_nonzero(scores >= float(limiar)))
+    total = int(scores.size)
+    ax.text(.985, .985,
+            f's(x) na malha: min={minimo:.7f}  max={maximo:.7f}\n'
+            f'Positivas previstas na malha: {positivos}/{total} ({100*positivos/total:.2f}%)',
+            transform=ax.transAxes, ha='right', va='top', fontsize=7.5,
+            color='#24374b', zorder=12,
+            bbox=dict(facecolor='white', edgecolor='#ccd4df', alpha=.93,
+                      boxstyle='round,pad=.22'))
+    return minimo, maximo, positivos, total
+
+
 def _mudanca_classes(score, tau_star):
     """Compara os mesmos scores nos dois cortes; sem labels da malha."""
     v = np.asarray(score, dtype=float)
@@ -1433,6 +1452,8 @@ def _fronteira_1d_comparativa(config, data, gm, op, plano, idx, tau_star,
                     bbox={'facecolor':'white','edgecolor':'#ccd3dc','alpha':.92},
                     zorder=8)
 
+        # DIAGNOSTICO_INTERVALO_GMM07_GMM08_V1 GMM08 1D
+        _anotar_intervalo_malha(ax, campo, tau)
         titulo=f'A — Corte fixo τ = 0,50' if j==0 else f'B — Corte ótimo MCC OOF τ* = {tau_star:.6g}'
         ax.set_title(f'{titulo}\nMCC OOF = {mcc:.5f}',fontsize=11.3,pad=10,fontweight='medium')
         ax.set(xlabel=nome_pc,xlim=(x[0],x[-1]),ylim=(0,teto))
@@ -1493,6 +1514,10 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
     Ambos os limiares partilham malha, campo de risco, escala e seções FULL
     das gaussianas de 95%. Só fronteira/hachura dependem do corte.
     """
+    # GMM_QUATRO_NIVEIS_F1F9_F10_V1
+    # Um campo da etapa (F1-F9 ou F10) com quatro niveis reais.
+    from src.gmm_contornos_quatro_niveis import gerar as novo_gerador
+    return novo_gerador(config, data, escolha, dest, ext, dpi, csv, tipo='GMM08', avaliacao=avaliacao)
     # PCA3D_GMM08_OFICIAL: apenas PCA 3D usa o novo PNG + HTML.
     if (data['coord'].shape[1] == 3
             and list(data['coord'].columns) == ['PC1','PC2','PC3']):
@@ -1621,6 +1646,8 @@ def _fronteira(config, data, escolha, dest, ext, dpi, csv, *, avaliacao):
                 ax.text(.02, .03, f'Sem contorno s(x)={tau:.5g} neste plano',
                         transform=ax.transAxes, color='white', fontsize=8,
                         bbox={'facecolor':'#152233','alpha':.8,'edgecolor':'none'})
+            # DIAGNOSTICO_INTERVALO_GMM07_GMM08_V1 GMM08 2D / TSNE 3D
+            _anotar_intervalo_malha(ax, campo, tau)
             ax.set(xlabel=nomes[par[0]], ylabel=nomes[par[1]],
                    xlim=(xx[0, 0], xx[0, -1]),
                    ylim=(yy[0, 0], yy[-1, 0]))

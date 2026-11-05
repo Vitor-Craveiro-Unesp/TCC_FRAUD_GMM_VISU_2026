@@ -98,6 +98,8 @@ def png_organizado(config, data, escolha, avaliacao, destino, ext, dpi):
                         transform=ax.transAxes,fontsize=8.2,zorder=8,
                         bbox=dict(boxstyle='round,pad=.25',facecolor='white',
                                   edgecolor='#d2dae5',alpha=.94))
+            # DIAGNOSTICO_INTERVALO_GMM07_GMM08_V1 GMM08 PCA 3D
+            geo._anotar_intervalo_malha(ax, risk, threshold)
             ax.set_xlim(xx[0,0],xx[0,-1]);ax.set_ylim(yy[0,0],yy[-1,0])
             ax.set_xlabel(f'PC{par[0]+1}',fontsize=9.5,labelpad=3)
             ax.set_ylabel(f'PC{par[1]+1}',fontsize=9.5,labelpad=3)
@@ -386,7 +388,8 @@ window.addEventListener('beforeunload',stop);
         return f'{nome}: fronteira presente na malha'
     status = (explicar_limiar(0.5, 'Tau = 0,50') + ' | ' +
               explicar_limiar(tau, 'Tau* = ' + f'{tau:.7f}') +
-              f'. Intervalo possivel: [{menor_risco:.7f}, {maior_risco:.7f}].')
+              f'. Intervalo possivel: [{menor_risco:.7f}, {maior_risco:.7f}].'
+              f' Malha volumetrica s(x): [{float(risco.min()):.7f}, {float(risco.max()):.7f}].')
     html = html.replace('__STATUS_FRONTEIRAS__', html_lib.escape(status))
 
     controles='\n'.join('<label class="chk"><input type="checkbox" data-layer="g{0}"> <span class="dot" style="background:{1}"></span>Gaussiana G{0}</label>'.format(k+1,cores[k % len(cores)]) for k in range(modelo.n_components))

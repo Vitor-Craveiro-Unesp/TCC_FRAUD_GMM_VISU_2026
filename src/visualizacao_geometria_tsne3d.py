@@ -336,6 +336,12 @@ def gerar_geometria_tsne3d(coord, y, modelo_gmm, riscos_gaussianos, destino, *,
     for geom in (False,True):
         _painel_fronteiras(X,y,modelo_gmm,secoes,tau,mccfix,mccstar,rotulo_origem,destino,int(dpi),geom)
         _html_fronteiras(X,y,modelo_gmm,malha,tau,mccfix,mccstar,rotulo_origem,destino,geom)
+    # GMM_QUATRO_NIVEIS_F1F9_F10_V1
+    # Substitui apenas os graficos 07/08 desta pasta de STAGING F10.
+    # O manifesto SHA e produzido abaixo, depois dos novos PNG/HTML.
+    from src.gmm_contornos_quatro_niveis import substituir_png_html_tsne3d
+    substituir_png_html_tsne3d(X, y, modelo_gmm, riscos, destino,
+        tau=tau, origem=origem, resolucao_cortes=int(resolucao_cortes), dpi=int(dpi))
     pts,scores,dens,resp=malha
     if salvar_csv:
         tab=pd.DataFrame(pts,columns=EIXOS)

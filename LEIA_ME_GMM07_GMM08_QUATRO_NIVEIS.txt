@@ -1,0 +1,64 @@
+TCC_EXPERIMENTAL_V3 — GMM07/GMM08, QUATRO NIVEIS (PCA/t-SNE, 1D/2D/3D)
+VERSÃO: GMM_QUATRO_NIVEIS_F1F9_F10_V1
+
+OBJETIVO
+  - Em OOF: usar a superficie do modelo vencedor REAJUSTADO com F1-F9.
+    O limiar tau* e o MCC são de OOF. As predicoes OOF continuam sendo
+    as de nove modelos de validação; por isso nao devem ser confundidas
+    com o campo do refit F1-F9.
+  - Em F10: usar O MESMO modelo congelado F1-F9, e definir o dominio da
+    malha pelas coordenadas F10 (transformadas sem refit); tau* continua
+    CONGELADO no OOF. Nao usar labels F10 para selecionar limiar/modelo.
+  - Um unico grafico com 4 niveis: tau=0,5; tau* OOF;
+    tau_mid=(min_malha+max_malha)/2; tau_max_malha (PONTO do maximo).
+  - Todos os exemplos fraudulentos REAIS representados (estrelas vermelhas),
+    apenas os legitimos sao subamostrados para evitar poluicao.
+  - PNGs e HTMLs 3D mantem os mesmos NOMES anteriores nas novas execucoes;
+    3D PNG usa tres cortes, HTML usa volume 3D interativo.
+  - Os pontos positivos da MALHA não alteram as predições da matriz
+    de confusao nem as metricas oficiais.
+
+O PACOTE MODIFICA SOMENTE CODIGO DE VISUALIZACAO
+  src/visualizacao_geometrica.py
+  src/visualizacao_gmm07.py
+  src/visualizacao_geometria_tsne3d.py
+  src/gmm_contornos_quatro_niveis.py       (NOVO)
+
+INSTALACAO NO WINDOWS (PowerShell, .venv ativada)
+1. Extraia o CONTEUDO do ZIP dentro da pasta raiz TCC_EXPERIMENTAL_V3.
+2. Confira se existe INSTALAR_GMM07_GMM08_4_NIVEIS.py na raiz e a pasta
+   PACOTE_GMM_QUATRO_NIVEIS ao lado do instalador.
+3. Sem treinar/alterar arquivos:
+
+   python .\INSTALAR_GMM07_GMM08_4_NIVEIS.py --checar
+
+4. Se aparecer [OK] para os tres arquivos e o modulo novo:
+
+   python .\INSTALAR_GMM07_GMM08_4_NIVEIS.py --aplicar
+
+5. Verifique a sintaxe novamente:
+
+   python -m compileall -q src
+
+Um backup completo dos TRES arquivos originais alterados sera gravado em
+outputs/backup_gmm_4_niveis_YYYYMMDD_HHMMSS_....
+
+LIMITACOES E CUIDADOS
+  - O instalador nao treina, nao le parquet, não utiliza F10,
+    nao altera YAML e nao mexe nos seus resultados antigos.
+  - Os PNG/HTML antigos nao mudam automaticamente. Novas geracoes vao
+    usar os novos layouts. NAO execute novamente todo o OOF so para ver
+    a alteracao. Avaliar regeneracao isolada por etapa e por experimento.
+  - A fase geometrica OOF (07.02) ainda pode REAJUSTAR o vencedor em F1-F9
+    para formar sua superficie; isto e diferente de repetir toda a grade OOF.
+  - O maximo de uma funcao continua geralmente nao produz uma CURVA;
+    ele sera marcado com um losango laranja.
+  - Se tau=0.50 ou tau* ficar fora do intervalo local, sua linha NAO sera
+    inventada: aparece apenas a indicacao numerica da classificacao.
+  - As saidas atuais estao protegidas por manifests/hashes. Evite
+    sobrescrever outputs. Para experimentos ja fechados, mantenha os
+    dados publicados intactos e teste uma nova versao separadamente.
+  - Teste de instalacao e verificacao AST/sintaxe feitos com os codigos
+    do projeto; a renderizacao completa em Matplotlib/Plotly deve ser
+    confirmada no .venv local. O ambiente de geracao do pacote apresentou
+    problema ao carregar o Matplotlib.
