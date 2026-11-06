@@ -8,12 +8,12 @@ dados:
   classe_positiva: 1
   coluna_id: NID_ALPHA
   colunas_excluir: []
-  fracao_base: 1.0
+  fracao_base: 0.1
 divisao:
   total_folds: 10
   quantidade_folds_teste: 1
   qual_fold_teste: 10
-  fracao_amostra_f10: 1.0
+  fracao_amostra_f10: 0.1
   estratificada: true
   embaralhar: true
 preprocessamento:
@@ -48,7 +48,7 @@ preprocessamento:
     tratamento: exigir_sufixo
   verificar_vazamento: true
 amostragem:
-  modo: NORMAL
+  modo: RUS
   razao_negativos_positivos: 16
   aplicar_somente_treino: true
   risco_historico:
