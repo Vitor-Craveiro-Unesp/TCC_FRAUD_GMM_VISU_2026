@@ -67,27 +67,48 @@ def _pontuar(gm, riscos, pontos):
 
 
 def _faixa(q, margem):
-    a, b = np.quantile(q, [.005, .995])
+    # F10_BOUNDARY_CERTIFICATE_V2: cobrir TODOS os pontos F10, nao percentis.
+    # Inclui extremos observados e uma margem em cada direcao.
+    a, b = float(np.min(q)), float(np.max(q))
     amplitude = float(b - a)
     if amplitude <= 1e-12:
         amplitude = max(abs(float(a)), 1.)
     return float(a - amplitude*margem), float(b + amplitude*margem)
 
 
-def _planos(X, gm, riscos, d, n, margem):
-    medias = X.mean(axis=0)
+def _eixo_com_ancora(valores, n, margem, referencia):
+    eixo = np.linspace(*_faixa(valores, margem), n)
+    if referencia is not None:
+        extras = np.atleast_1d(np.asarray(referencia, dtype=float))
+        extras = extras[(extras >= eixo[0]) & (extras <= eixo[-1])]
+        # Acrescenta nos exatos para manter extremos e certificados, sem perder
+        # resolucao da malha regular nem alterar a ordem monotona dos eixos.
+        eixo = np.unique(np.concatenate((eixo, extras)))
+    return eixo
+
+
+def _planos(X, gm, riscos, d, n, margem, *, ancora=None, referencias=None):
+    # Com F10+ e F10- o ponto de fronteira e obtido por bissecao no MESMO GMM.
+    # Os tres planos em 3D passam por este ponto, nao por uma media arbitraria.
+    medias = X.mean(axis=0) if ancora is None else np.asarray(ancora, dtype=float).ravel()
     pares = [(0,)] if d == 1 else ([(0, 1)] if d == 2 else [(0, 1), (0, 2), (1, 2)])
     planos = []
     for par in pares:
+        def refs(j):
+            pontos = [] if ancora is None else [medias[j]]
+            if referencias is not None:
+                pontos.extend(float(v[j]) for v in referencias)
+            return pontos if pontos else None
         if len(par) == 1:
-            xx = np.linspace(*_faixa(X[:, par[0]], margem), n)
-            pts = np.tile(medias, (n, 1))
+            xx = _eixo_com_ancora(X[:, par[0]], n, margem, refs(par[0]))
+            pts = np.tile(medias, (len(xx), 1))
             pts[:, par[0]] = xx
             risco = _pontuar(gm, riscos, pts)
             grade = (xx,)
         else:
-            xx, yy = np.meshgrid(np.linspace(*_faixa(X[:, par[0]], margem), n),
-                                 np.linspace(*_faixa(X[:, par[1]], margem), n))
+            e0 = _eixo_com_ancora(X[:, par[0]], n, margem, refs(par[0]))
+            e1 = _eixo_com_ancora(X[:, par[1]], n, margem, refs(par[1]))
+            xx, yy = np.meshgrid(e0, e1)
             pts = np.tile(medias, (xx.size, 1))
             pts[:, par[0]], pts[:, par[1]] = xx.ravel(), yy.ravel()
             risco = _pontuar(gm, riscos, pts).reshape(xx.shape)
@@ -158,7 +179,7 @@ def _rotulos_planos(par, nomes, medias):
     titulo = f'{nomes[par[0]]} × {nomes[par[1]]}'
     if len(nomes) == 3:
         z = next(i for i in range(3) if i not in par)
-        titulo += f'\n{nomes[z]} = {medias[z]:.4g} (media da etapa)'
+        titulo += f'\n{nomes[z]} = {medias[z]:.4g} (valor fixado)'
     return titulo
 
 
@@ -194,8 +215,44 @@ def _elin_2d(ax, gm, par, fixos):
                              fc='none', ec=plt.get_cmap('tab10')(k % 10), alpha=.78, zorder=6))
 
 
+def _intervalos_gaussianos_95_1d(ax, gm, xx):
+    """GMM08 1D: equivalentes unidimensionais às elipses FULL 95% do 2D.
+
+    Faixas centrais de CADA gaussiana, não um intervalo de confiança
+    estimado dos dados nem um intervalo 95% da mistura inteira.
+    """
+    # GMM_1D_CLEAN_GAUSS95_V3
+    from scipy.stats import norm
+
+    if gm.covariance_type != 'full' or gm.means_.shape[1] != 1:
+        raise ValueError('Intervalos gaussianos 1D exigem GMM de covariância FULL em 1D.')
+
+    z = float(norm.ppf(.975))
+    handles = []
+    for k in range(gm.n_components):
+        media = float(gm.means_[k, 0])
+        variancia = float(gm.covariances_[k, 0, 0])
+        if not (np.isfinite(media) and np.isfinite(variancia) and variancia > 0):
+            raise ValueError(f'Parâmetros inválidos na gaussiana G{k+1}.')
+        delta = z * np.sqrt(variancia)
+        esquerda, direita = media - delta, media + delta
+        cor = plt.get_cmap('tab10')(k % 10)
+        ax.axvspan(esquerda, direita, fc=cor, ec='none', alpha=.10, zorder=.3)
+        ax.axvline(esquerda, color=cor, ls='--', lw=1.05, alpha=.8, zorder=1.3)
+        ax.axvline(direita, color=cor, ls='--', lw=1.05, alpha=.8, zorder=1.3)
+        handles.append(Line2D([0], [0], color=cor, ls='--', lw=2,
+                              label=f'G{k+1} 95%: [{esquerda:.2f}, {direita:.2f}]'))
+
+    # A adição das gaussianas não deve estender o domínio visual além
+    # da malha F10 congelada; regiões externas são simplesmente recortadas.
+    ax.set_xlim(float(xx[0]), float(xx[-1]))
+    ax.legend(handles=handles, loc='upper right',
+              title='Gaussianas — intervalo central 95%',
+              fontsize=8.0, title_fontsize=8.2, framealpha=.94)
+
+
 def _painel_png(config, data, escolha, destino, ext, dpi, grafico, origem, mcc, mccnome,
-                planos, medias, lo, hi, *, substituir_staging=False, avaliacao_diagnostico=None):
+                planos, medias, lo, hi, *, substituir_staging=False, avaliacao_diagnostico=None, certificado=None):
     X, y, gm, riscos, tau = _validate(data, escolha)
     nomes = list(data['coord'].columns)
     d = X.shape[1]
@@ -246,6 +303,8 @@ def _painel_png(config, data, escolha, destino, ext, dpi, grafico, origem, mcc, 
             pad = max((ymax-ymin)*.22, .0001)
             ax.set_ylim(max(0, ymin-pad), min(1, ymax+pad))
             ax.set_xlabel(nomes[0]); ax.set_ylabel('Score de fraude s(x)')
+            if grafico == 'GMM08':
+                _intervalos_gaussianos_95_1d(ax, gm, xx)
         else:
             xx, yy = grade
             ax.pcolormesh(xx, yy, risco, cmap='viridis', norm=norm,
@@ -274,6 +333,19 @@ def _painel_png(config, data, escolha, destino, ext, dpi, grafico, origem, mcc, 
                     estados.append((title, _status_minmax(risco, level)))
             ax.set_xlabel(nomes[par[0]]); ax.set_ylabel(nomes[par[1]])
             ax.set_xlim(xx[0,0], xx[0,-1]); ax.set_ylim(yy[0,0], yy[-1,0])
+        # F10_BOUNDARY_CERTIFICATE_V2: ponto REAL da funcao score=tau*.
+        # No 3D os planos passam por esse ponto, pois suas dimensoes restantes
+        # foram fixadas na propria coordenada da raiz de bissecao.
+        if certificado is not None and certificado['cruzamento_confirmado']:
+            raiz = certificado['ponto_fronteira']
+            if d == 1:
+                ax.scatter([raiz[0]], [tau], marker='X', s=120,
+                           color=COLORS['oof'], edgecolors='white', linewidths=.7,
+                           zorder=14)
+            else:
+                ax.scatter([raiz[par[0]]], [raiz[par[1]]], marker='X', s=105,
+                           color=COLORS['oof'], edgecolors='white', linewidths=.7,
+                           zorder=14)
         ax.set_title(_rotulos_planos(par, nomes, medias), fontsize=11, pad=10)
         ax.grid(alpha=.07)
         ax.text(.02, .02, f'Malha deste plano: [{local_lo:.7f}, {local_hi:.7f}]',
@@ -286,13 +358,12 @@ def _painel_png(config, data, escolha, destino, ext, dpi, grafico, origem, mcc, 
             if origem == 'OOF' else
             'F10: modelo F1–F9 congelado; limiar τ* escolhido exclusivamente em OOF'
             if origem == 'F10' else 'Prévia sintética; NÃO é avaliação OOF')
-    fig.text(.5, .934, f'{origem} | {d}D FULL | K={gm.n_components} | {desc}',
-             ha='center', fontsize=10, color='#50627a')
+    # GMM_2D_3D_LIMPO_F10_V4_2: subtítulo removido dos PNGs 1D/2D/3D.
     # A anotacao de estado nunca afirma que um contorno ausente seja positivo.
     global_note = (f'Malha s(x): mínimo={lo:.7f} | máximo={hi:.7f} | '
                    f'médio={(lo+hi)/2:.7f} | τ*= {tau:.7f} | '
                    f'{mccnome}(0,50)={mcc[0]:.7f} | {mccnome}(τ*)={mcc[1]:.7f}')
-    fig.text(.5, .884, global_note, ha='center', fontsize=9.3, color='#24364c')
+    fig.text(.5, (.884 if d == 1 else .932), global_note, ha='center', fontsize=9.3, color='#24364c')
     handles = [Line2D([0],[0], color=COLORS[k], lw=2.3,
                       ls='--' if k=='medio' else '-', label=(nm+' = '+format(v,'.7f') if k!='maximo' else 'Máximo da malha (ponto)'))
                for k,v,nm in niveis]
@@ -302,12 +373,14 @@ def _painel_png(config, data, escolha, destino, ext, dpi, grafico, origem, mcc, 
                        label=f'Legítimas: amostra ({len(il)}/{np.count_nonzero(y==0)})')]
     if grafico == 'GMM08' and d > 1:
         handles.append(Line2D([0],[0],ls='--',color='#8b8196',label='Gaussianas FULL 95%'))
-    fig.legend(handles=handles, loc='upper center', bbox_to_anchor=(.5, .85),
+    fig.legend(handles=handles, loc='upper center', bbox_to_anchor=(.5, .85 if d == 1 else .890),
                ncol=3 if d>1 else 2, fontsize=8.4, frameon=False)
     # HOTFIX_GMM_QUATRO_NIVEIS_BARRA_FORA_DOS_EIXOS_20261104
     fig.subplots_adjust(left=.07 if d!=3 else .055,
                         right=.96 if d==1 else (.885 if d==2 else .895),
-                        top=.72, bottom=.16, wspace=.28 if d==3 else .33)
+                        top=(.72 if d==1 else .77),
+                        bottom=(.12 if d==1 else .10),
+                        wspace=.28 if d==3 else .33)
     if d > 1:
         from matplotlib.cm import ScalarMappable
         # Eixo independente: nao ocupa espaco de nenhum painel de risco.
@@ -333,7 +406,12 @@ def _painel_png(config, data, escolha, destino, ext, dpi, grafico, origem, mcc, 
         msg += f'\nPredições positivas F10 (modelo congelado): {n_f10}/{len(y)}.'
     else:
         msg += '\nMáximo marcado como ponto; níveis ausentes não são inventados.'
-    fig.text(.5, .048, msg, ha='center', fontsize=8.2, color='#52657d')
+    if origem == 'F10' and certificado is not None:
+        if certificado['cruzamento_confirmado']:
+            msg += ' | X vermelho: fronteira τ* confirmada por bissecao F10.'
+        elif certificado['positivos_f10']:
+            msg += ' | Positivos F10 sem par negativo: contorno nao garantido.'
+    # GMM_2D_3D_LIMPO_F10_V4_2: rodapé visual removido; métricas e dados preservados.
     destino = Path(destino)
     destino.mkdir(parents=True,exist_ok=True)
     filename = _nome(grafico,d) + '.' + ext
@@ -348,7 +426,7 @@ def _painel_png(config, data, escolha, destino, ext, dpi, grafico, origem, mcc, 
     return filename
 
 
-def _html3d(config, data, escolha, destino, grafico, origem, mcc, planos, lo_plano, hi_plano, *, substituir_staging=False):
+def _html3d(config, data, escolha, destino, grafico, origem, mcc, planos, lo_plano, hi_plano, *, substituir_staging=False, certificado=None):
     """HTML offline com a malha VOLUMÉTRICA do mesmo GMM congelado.
 
     Usa curvas como ISOSUPERFÍCIES em 3D, não como planos artificiais.
@@ -391,11 +469,19 @@ def _html3d(config, data, escolha, destino, grafico, origem, mcc, planos, lo_pla
     fig.add_trace(go.Scatter3d(x=[pmax[0]],y=[pmax[1]],z=[pmax[2]],mode='markers',
         marker={'size':6,'color':COLORS['maximo'],'symbol':'diamond'},
         name=f'Máximo da malha volumétrica = {hi:.7f}'))
+    # F10_BOUNDARY_CERTIFICATE_V2: marcacao exata de cruzamento em 3D.
+    if certificado is not None and certificado['cruzamento_confirmado']:
+        raiz = certificado['ponto_fronteira']
+        fig.add_trace(go.Scatter3d(
+            x=[raiz[0]], y=[raiz[1]], z=[raiz[2]], mode='markers',
+            marker={'size':8, 'color':COLORS['oof'], 'symbol':'diamond'},
+            name='Cruzamento real τ* confirmado por bissecao F10'))
     if grafico=='GMM08':
         for k in range(gm.n_components):
             cov = np.asarray(gm.covariances_[k], dtype=float)
             eig,V=np.linalg.eigh(cov)
-            if np.any(eig<=0): continue
+            if np.any(eig<=0):
+                raise ValueError(f'Covariancia FULL G{k+1} nao positiva definida: nao e possivel desenhar 95%.')
             u=np.linspace(0,2*np.pi,26)
             v=np.linspace(0,np.pi,19)
             sphere=np.stack((np.outer(np.cos(u),np.sin(v)),
@@ -403,10 +489,25 @@ def _html3d(config, data, escolha, destino, grafico, origem, mcc, planos, lo_pla
                              np.outer(np.ones_like(u),np.cos(v))),axis=-1)
             mat=V@np.diag(np.sqrt(eig*chi2.ppf(.95,3)))
             P=np.einsum('ij,abj->abi',mat,sphere)+gm.means_[k]
-            color=f'hsl({(k*69)%360},60%,45%)'
-            fig.add_trace(go.Surface(x=P[:,:,0],y=P[:,:,1],z=P[:,:,2],
-                colorscale=[[0,color],[1,color]],opacity=.14,showscale=False,
-                name=f'Gaussiana G{k+1}, 95%',visible='legendonly'))
+            # GMM08_HTML_3D_ELIPSOIDES_FULL_95_V5
+            # Cor idêntica às seções gaussianas 95% nos PNGs (tab10).
+            from matplotlib.colors import to_hex
+            color = to_hex(plt.get_cmap('tab10')(k % 10))
+            # Elipsoide FULL: (x-mu)^T Sigma^-1 (x-mu) = chi2_3(0.95).
+            # Antes o trace era 'legendonly': não aparecia ao abrir o HTML.
+            fig.add_trace(go.Surface(x=P[:,:,0], y=P[:,:,1], z=P[:,:,2],
+                colorscale=[[0,color],[1,color]], opacity=.23,
+                showscale=False, showlegend=True, visible=True,
+                name=f'G{k+1} — elipsoide FULL 95%',
+                hovertemplate=f'Gaussiana G{k+1} | elipsoide central FULL 95%<extra></extra>'))
+            # Centro visível facilita comparar componentes e suas elipsoides.
+            fig.add_trace(go.Scatter3d(
+                x=[float(gm.means_[k,0])], y=[float(gm.means_[k,1])],
+                z=[float(gm.means_[k,2])], mode='markers',
+                marker={'size':5,'color':color,'symbol':'diamond',
+                        'line':{'color':'#101827','width':1}},
+                name=f'Centro G{k+1}',showlegend=False,
+                hovertemplate=f'Centro da gaussiana G{k+1}<extra></extra>'))
     titulo = ('SENSIBILIDADE GMM07 — QUATRO NÍVEIS' if grafico=='GMM07'
               else 'MAPA DE RISCO GMM08 — QUATRO NÍVEIS E GAUSSIANAS 95%')
     origem_texto = ('OOF: modelo final F1–F9, limiar OOF' if origem=='OOF' else
@@ -446,14 +547,24 @@ def gerar(config, data, escolha, destino, ext, dpi, csv, *, tipo, avaliacao=None
     margem = float(op.get('margem',.15))
     if not 0 <= margem <= 1:
         raise ValueError('Margem de malha invalida.')
-    planos,medias=_planos(X,gm,riscos,d,n,margem)
+    origem,mcc,nome_mcc=_fonte(destino,avaliacao,y,data,tau)
+    certificado = None
+    if origem == 'F10':
+        from src.gmm_fronteira_f10 import diagnosticar
+        certificado = diagnosticar(gm, riscos, X, data['scores'], tau)
+    referencias = ([certificado['ponto_positivo'], certificado['ponto_negativo']]
+                   if certificado is not None and certificado['cruzamento_confirmado'] else None)
+    planos,medias=_planos(X,gm,riscos,d,n,margem,
+                          ancora=(certificado['ponto_fronteira']
+                                  if certificado is not None else None),
+                          referencias=referencias)
     lo = min(float(np.min(item[2])) for item in planos)
     hi = max(float(np.max(item[2])) for item in planos)
-    origem,mcc,nome_mcc=_fonte(destino,avaliacao,y,data,tau)
     filename = _painel_png(config,data,escolha,destino,ext,dpi,tipo,origem,mcc,nome_mcc,
                           planos,medias,lo,hi,substituir_staging=substituir_staging,
                           avaliacao_diagnostico=avaliacao if origem=='OOF'
-                          and isinstance(avaliacao,dict) and 'p' in avaliacao else None)
+                          and isinstance(avaliacao,dict) and 'p' in avaliacao else None,
+                          certificado=certificado)
     dest=Path(destino)
     if csv:
         for par, grade, scores in planos:
@@ -482,7 +593,7 @@ def gerar(config, data, escolha, destino, ext, dpi, csv, *, tipo, avaliacao=None
             ]).to_csv(dest/'GMM07_metricas_comparativas.csv',index=False,float_format='%.17g')
     if d==3:
         _html3d(config,data,escolha,dest,tipo,origem,mcc,planos,lo,hi,
-                substituir_staging=substituir_staging)
+                substituir_staging=substituir_staging, certificado=certificado)
     if tipo=='GMM07':
         return {'arquivo':filename,'mcc_fixo':mcc[0],'mcc_otimo':mcc[1],
                 'origem_mcc':origem,'n_planos':len(planos)}

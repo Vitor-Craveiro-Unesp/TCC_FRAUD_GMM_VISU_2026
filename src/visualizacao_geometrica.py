@@ -57,6 +57,10 @@ def _exigir(cond, msg):
 
 
 def _ativo(config, nome):
+    # F10_BOUNDARY_CERTIFICATE_V2: GMM07/GMM08 somente na avaliacao F10.
+    # As rotinas F10 chamam os renderizadores diretamente e nao dependem daqui.
+    if nome in ('sensibilidade_fronteira', 'mapa_risco_fronteira'):
+        return False
     # Graficos geometricos estao na fase 'teste_final' do YAML, MAS
     # sua origem e exclusivamente o desenvolvimento F1..F9.
     # Experimentos antigos podem nao ter este novo grafico no YAML congelado.
