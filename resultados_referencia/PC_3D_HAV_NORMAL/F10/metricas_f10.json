@@ -1,0 +1,131 @@
+{
+  "versao": "avaliacao-pca-f10-tau-oof-congelado-v1",
+  "tipo_avaliacao": "TESTE_FINAL_F10_LIMIAR_OOF_CONGELADO",
+  "limiar_otimizado_no_f10": false,
+  "n": 185239,
+  "n_legitimas": 184274,
+  "n_fraudes": 965,
+  "prevalencia": 0.00520948612333256,
+  "ap": 0.032692712196212136,
+  "logloss": 0.027974989811800993,
+  "exp_menos_logloss": 0.9724126867214248,
+  "mcc_limiar_oof": 0.14751267640846694,
+  "score_composto_limiar_oof": 0.5262872457072901,
+  "limiar_mcc_oof_congelado": 0.027842539287209436,
+  "comparacao_limiares": {
+    "tau_0_50": {
+      "limiar": 0.5,
+      "mcc": 0.0,
+      "matriz_confusao": {
+        "ordem_linhas_reais": [
+          0,
+          1
+        ],
+        "ordem_colunas_previstas": [
+          0,
+          1
+        ],
+        "tn": 184274,
+        "fp": 0,
+        "fn": 965,
+        "tp": 0,
+        "contagens": [
+          [
+            184274,
+            0
+          ],
+          [
+            965,
+            0
+          ]
+        ],
+        "percentuais_por_classe_real": [
+          [
+            100.0,
+            0.0
+          ],
+          [
+            100.0,
+            0.0
+          ]
+        ],
+        "percentuais_do_total": [
+          [
+            99.47905138766674,
+            0.0
+          ],
+          [
+            0.520948612333256,
+            0.0
+          ]
+        ]
+      },
+      "precision": 0.0,
+      "recall_sensibilidade": 0.0,
+      "especificidade": 1.0,
+      "f1": 0.0,
+      "fpr": 0.0,
+      "fnr": 1.0,
+      "accuracy": 0.9947905138766674,
+      "positivos_preditos": 0
+    },
+    "tau_mcc_oof": {
+      "limiar": 0.027842539287209436,
+      "mcc": 0.14751267640846694,
+      "matriz_confusao": {
+        "ordem_linhas_reais": [
+          0,
+          1
+        ],
+        "ordem_colunas_previstas": [
+          0,
+          1
+        ],
+        "tn": 175380,
+        "fp": 8894,
+        "fn": 485,
+        "tp": 480,
+        "contagens": [
+          [
+            175380,
+            8894
+          ],
+          [
+            485,
+            480
+          ]
+        ],
+        "percentuais_por_classe_real": [
+          [
+            95.17349164830632,
+            4.826508351693674
+          ],
+          [
+            50.259067357512954,
+            49.740932642487046
+          ]
+        ],
+        "percentuais_do_total": [
+          [
+            94.67768666425536,
+            4.8013647234113765
+          ],
+          [
+            0.2618239139706001,
+            0.25912469836265584
+          ]
+        ]
+      },
+      "precision": 0.0512054619159377,
+      "recall_sensibilidade": 0.49740932642487046,
+      "especificidade": 0.9517349164830633,
+      "f1": 0.09285230679949705,
+      "fpr": 0.04826508351693674,
+      "fnr": 0.5025906735751295,
+      "accuracy": 0.9493681136261802,
+      "positivos_preditos": 9374
+    }
+  },
+  "id_candidato_oof": "b919446141dd37",
+  "dimensao_pca": 3
+}

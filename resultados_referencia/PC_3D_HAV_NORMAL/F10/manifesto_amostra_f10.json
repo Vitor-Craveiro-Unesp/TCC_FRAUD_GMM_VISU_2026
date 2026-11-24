@@ -1,0 +1,9 @@
+{
+  "fracao": 1.0,
+  "semente": 42,
+  "n": 185239,
+  "sha256_indices": "b1754caad6eb14582202beb6a9089b11434519e6d9a4cbc7f22bd644c041fec0",
+  "origem": "F10 da base/folds congelados do proprio experimento",
+  "classe": "AMOSTRAL_EXPLORATORIO_REPETIDO",
+  "sem_ajuste_no_f10": true
+}

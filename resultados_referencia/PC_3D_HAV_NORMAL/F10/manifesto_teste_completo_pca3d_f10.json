@@ -1,0 +1,40 @@
+{
+  "tipo": "TESTE_COMPLETO_PCA3D_F10_EXPLORATORIO_REPETIDO",
+  "fracao_f10_dentro_do_fold": 1.0,
+  "n_f10": 185239,
+  "n_dev": 1667155,
+  "limiar_congelado_oof": 0.027842539287209436,
+  "limiar_otimizado_no_f10": false,
+  "modelo_sha256": "40818159194309f755621a453ba39cdb935b5fe9241c035c5d64db478d315134",
+  "predicoes_sha256": "a0c6dda0179358acdadf6658d1d5853389c05781f3f007e11d1ab1c7d7b17af4",
+  "metricas_sha256": "38028913139166edf91ec06e5b36eff4685f95e1251b2a2a12633d19eb9d6690",
+  "graficos_sha256": {
+    "00_painel_score_composto.png": "d139edc73acc4f17d8166854a00e24b7fd4c08499ab60accfe25bb19d460a4e4",
+    "01_curva_precision_recall.png": "2f06757f1cab42d66f5d6e50db0df7a1239bd35e830c7cb5e232a4f08b3f2814",
+    "02_mcc_por_limiar.png": "55c45e4d71b9e8cff45bdb18fac9903b33b00da244c4da54753343164c39fdc1",
+    "03_matriz_confusao_05.png": "d3e1939d5aeb37836372510d690c58e6c9e5603eaa175dc6a9ae0b893b784b01",
+    "04_matriz_confusao_mcc.png": "374e16d4c78163b57f0a746cd82e16ecae66bb85e1f48218a18710766b16064e",
+    "05_distribuicao_probabilidades.png": "b68058b3be1b2a46389b557531e51b0b2f32e9731dc099354dacc3ce71bdea81",
+    "12_pca_projecao_PC1_PC2_PC3.png": "8ea5c3de189627e8ea083661e85214306850c3a7129a1d9c38a26d81b904da3d",
+    "PCA_OBSERVACOES_PC1_PC2_PC3.png": "5d78b00757b0322eb8c113b6762045116b07e8fb8c00d61c3f22b59a3200fae0",
+    "GMM01_densidade_marginal_3d_PC1.png": "583f98bdeb0342c8b3c115be2bf77c21efb024d30db9c4b09e291ed4ea27abf8",
+    "GMM01_densidade_marginal_3d_PC2.png": "4c8dc31dfa6025b11d749729b6f48dcc18fd56c59fd8d050ed3aa5c314a05e54",
+    "GMM01_densidade_marginal_3d_PC3.png": "e6da5e71bbf11c24c3f53747e112fe0bd17453a9116861060227e775f98c4690",
+    "GMM01_conjunta_corte_PC1_PC2.png": "78aaec33f6e320b5518d7dd601f40b67c103f17b3e1cb2a26736ddd2bb144c4f",
+    "GMM01_conjunta_corte_PC1_PC3.png": "b27de865c2843fe4f7578205677d8faac45952c89219ea6dd869ddce7b01ad76",
+    "GMM01_conjunta_corte_PC2_PC3.png": "8663fc58a97d1dd0e7b486e922b5b8d23ba861d90bb5b9eba36bcc1796b2013c",
+    "GMM01_geometria_gaussianas_FULL_3d_95.png": "e56db5edda9a304708d55c7ab25eca65f3188ddc10e7cba66bda3f068d02c949",
+    "GMM04_dominancia_3d.png": "49fc50d971655d1bcc94857fc90dae48e1374d3dbc703300a6a92b66e51f9d24",
+    "GMM07_sensibilidade_3d_comparativo.png": "3dd2bb82187c29e522efb0f5889caf460cbe5a483765bb8c13c6843be8f8b02a",
+    "GMM08_mapa_risco_3d_comparativo.png": "0b8f7da70decbae62cf2603e776639662c4e27ae5b97e4d87b27e4e9ae92c56c"
+  },
+  "interativos_sha256": {
+    "GMM01_densidade_conjunta_PCA3D_INTERATIVA.html": "56874a016127ac3c616980951a586134810889d633b137f87322a8b16fcd8717",
+    "GMM01_geometria_gaussianas_FULL_3d_95_INTERATIVA.html": "9ca8279ab12fa9c8c044efe33062b477ac1f0c130e742d8d602b62c300bcc131",
+    "GMM04_dominancia_3d_INTERATIVA.html": "cb839b62d9b42ff45996db411c75088606451f39343c7a4674ac68157a9e7768",
+    "GMM07_sensibilidade_3d_comparativo_INTERATIVA.html": "3acab1aca583ced0893e804136af5213c32bb20556451450951fe2edb18c5e45",
+    "GMM08_mapa_risco_3d_comparativo_INTERATIVA.html": "be50d8a5b9282237e9fdff9f1fc78e96e17ab361f2de7d26419d23cc962a5170"
+  },
+  "pre01": "diagnosticos/PRE01_F10/PRE01_F10_diagnostico_padronizacao_completo.html",
+  "galeria": "galeria/index.html"
+}

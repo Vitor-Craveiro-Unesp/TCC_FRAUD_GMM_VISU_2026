@@ -1,0 +1,31 @@
+{
+  "versao": "pca-gmm-final-f1f9-v1",
+  "tipo": "TREINAMENTO_FINAL_F1_F9",
+  "teste_f10_executado": false,
+  "fracao_base": 1.0,
+  "dimensao_pca": 3,
+  "id_candidato_oof": "b919446141dd37",
+  "limiar_mcc_oof_congelado": 0.027842539287209436,
+  "n_treino_original": 1667155,
+  "n_ajuste_gmm": 1667155,
+  "gmm_parametros_vencedor": {
+    "n_components": 2,
+    "covariance_type": "full",
+    "reg_covar": 1e-06,
+    "max_iter": 200,
+    "n_init": 3,
+    "tol": 0.001,
+    "init_params": "kmeans"
+  },
+  "modo_amostragem_vencedor": "NORMAL",
+  "razao_rus_vencedora": null,
+  "semente_experimento": 42,
+  "proveniencia": {
+    "sha256_parquet": "2b19742c87d70cb8d69e59b2956d6f040c90c18a126947cb7988044e4471a3de",
+    "sha256_folds": "ec35267b9085f92c4f458a34e0ce244f79b8213c6b9ca43c84e3c3789a9cb9c6",
+    "sha256_yaml": "5b96bf89300dbfcd10f6da5933ecc0818a09e2691e588bf437761069dd58213a",
+    "experimento_oof": "outputs/experimento_pca_gmm_20261115_170440",
+    "sha256_predicoes_oof": "35696139cbe059a5312c1d05d413a430c155ab61436dd8b8fb210d56fa350758"
+  },
+  "sha256_modelo_final": "40818159194309f755621a453ba39cdb935b5fe9241c035c5d64db478d315134"
+}

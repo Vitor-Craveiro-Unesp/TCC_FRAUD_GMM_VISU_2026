@@ -1,0 +1,41 @@
+{
+  "n": 83358,
+  "n_legitimas": 82926,
+  "n_fraudes": 432,
+  "prevalencia": 0.005182465990066941,
+  "ap": 0.009585584546888811,
+  "mcc": 0.0478453108052352,
+  "logloss": 0.03171145797737478,
+  "score": 0.5007647723993115,
+  "limiar_mcc": 0.006547245473907337,
+  "total_limiares_avaliados": 83348,
+  "mcc_limiar_05": 0.0,
+  "tipo_avaliacao": "OOF_AMOSTRAL_NAO_OFICIAL",
+  "quantidade_folds_cv": 9,
+  "id_candidato": "ce8b865603f488",
+  "configuracao": {
+    "metodo": "TSNE",
+    "reducao": {
+      "perplexity": 50,
+      "n_components": 1,
+      "initialization": "pca",
+      "metric": "euclidean",
+      "learning_rate": "auto",
+      "early_exaggeration": 12.0,
+      "n_iter": 250,
+      "theta": 0.5
+    },
+    "modo": "NORMAL",
+    "razao": null,
+    "gmm": {
+      "n_components": 4,
+      "covariance_type": "full",
+      "reg_covar": 1e-06,
+      "max_iter": 200,
+      "n_init": 3,
+      "tol": 0.001,
+      "init_params": "kmeans"
+    },
+    "suavizacao": 0.0
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "chave_execucao": "c471e082dddffeb857b077b887e9a71a2db5489ea0b869d136af1dd24b4c6f3b",
+  "status": "concluido_06_03",
+  "tipo": "oficial",
+  "inicio_local": "2026-11-15T17:10:24.152346-03:00",
+  "pendente_em_outros_passos": [],
+  "versao_layout": 2,
+  "visualizacoes": "concluidas",
+  "n_jobs": -1,
+  "politica_paralelismo": "folds/candidatos sequenciais para limitar memoria; threads numericas sob n_jobs",
+  "candidatos_concluidos": [
+    "76b28f2e9e7df1",
+    "92f7993f36cfdf",
+    "e863787ca9b0e7"
+  ],
+  "sha256_parquet": "2b19742c87d70cb8d69e59b2956d6f040c90c18a126947cb7988044e4471a3de",
+  "sha256_folds": "ec35267b9085f92c4f458a34e0ce244f79b8213c6b9ca43c84e3c3789a9cb9c6",
+  "sha256_yaml": "4024e915f52f19008447256012816d48b79efe79dce1320af59a6827bbf6d608",
+  "registros_desenvolvimento": 1667155,
+  "registros_reservados_f10": 185239,
+  "ram_dataframe_bytes": 135096914,
+  "reaberta_em_retomada": false,
+  "versoes": {
+    "python": "3.13.3",
+    "pandas": "3.0.5",
+    "numpy": "2.5.3",
+    "sklearn": "1.9.1",
+    "pyarrow": "25.0.1",
+    "plataforma": "Windows-10-10.0.19045-SP0"
+  },
+  "quantidade_candidatos": 3,
+  "n_desenvolvimento_trabalhado": 1667155,
+  "n_folds_cv": 9,
+  "fim_local": "2026-11-15T17:18:27.250228-03:00",
+  "visualizacoes_concluidas": [
+    "07.01",
+    "07.02",
+    "07.03"
+  ],
+  "teste_final": {
+    "status": "concluido",
+    "dimensao_pca": 1,
+    "carater": "AMOSTRAL_EXPLORATORIO_F10_JA_UTILIZADO",
+    "n_f10": 185239,
+    "sem_reotimizar_tau": true,
+    "galeria": "vencedor/teste_final/galeria/index.html",
+    "manifesto": "vencedor/teste_final/manifesto_teste_completo_pca1d_f10.json"
+  }
+}
